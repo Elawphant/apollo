@@ -8,7 +8,23 @@
     "paths": {
       "apollo/tests/*": ["tests/*"],
       "apollo/*": ["app/*"],
-      "*": ["types/*"]
+      "*": ["types/*"],
+      "ember-apollo-data": [
+        "lib/ember-apollo-data/addon",
+      ],
+      "ember-apollo-data/*": [
+        "lib/ember-apollo-data/addon/*",
+      ],
+
     }
-  }
+  },
+  "include": [
+    "app/**/*",
+    "types/**/*",
+  ],
+  "exclude": [  
+    "tests/**/*",
+    "vendor",
+    "ember__test-helpers",
+  ]
 }
