@@ -1,6 +1,6 @@
-import Transform from 'ember-apollo-data/transform/transform';
+import FieldProcessor from 'ember-apollo-data/field-processor/field-processor';
 
-export default class BooleanTransform extends Transform {
+export default class StringFieldProcessor extends FieldProcessor {
   /**
    * Serializes the data to ApolloModel data type
    * Use this method when encapsulating response data
@@ -9,7 +9,7 @@ export default class BooleanTransform extends Transform {
    * @param { any } deserialized: non-serialized data received from server
    * @returns { any }: transformed/encapsulated data
    */
-  public serialize = (deserialized: any): boolean | null => {
-    return deserialized ? Boolean(deserialized) : null;
+  serialize = (deserialized: any): string | null => {
+    return deserialized ? String(deserialized) : null;
   };
 }

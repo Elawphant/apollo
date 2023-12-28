@@ -1,18 +1,9 @@
-import type ApplicationInstance from '@ember/application/instance';
-import { assert } from '@ember/debug';
-import { getOwner } from '@ember/owner';
-import { builtInTransforms } from 'ember-apollo-data/builtin-transforms/built-in-transforms';
 import Node from 'ember-apollo-data/model/node';
-import type {
-  AttrField,
-  RelationshipField,
-} from 'ember-apollo-data/model/field-mappings';
 import {
   PageInfoFields,
   PageInfoArgs,
 } from 'ember-apollo-data/queries/pagination';
 import type EADStoreService from 'ember-apollo-data/services/ead-store';
-import type Transform from 'ember-apollo-data/transform';
 import { capitalize } from '@ember/string';
 
 export function configureModelConstructor(
@@ -84,7 +75,6 @@ export function configureConnectionVariables(
 }
 
 export function configureNodeVariables(
-  modelConstructor: typeof Node,
   prefix: string = '',
   suffix = '',
 ): { [dataKey: string]: [VariableNameString, ScalarTypeString] } {
@@ -101,7 +91,7 @@ export function configureNodeFragment(
 ): string {
   const fields = Object.values(modelConstructor.Meta)
     // remove 'id' and '__typename' because we use them with MinimalFragment
-    .filter((field) => !['id', '__typename'].includes(field.propertyName))
+    .filter((field) => !['id', '__typename'].includes(field.propertyName as string))
     // make fragment fields for fields
     .map((field: any) => {
       if (field.fieldType === 'attribute') {
@@ -128,7 +118,6 @@ export function configureNodeQuery(
   fieldsPrefix: string = '',
   fieldsSuffix: string = '',
 ) {
-
   const ModelConstructor = store.modelFor(modelName);
   let fields: string[] = [];
   if (onlyFields) {
@@ -147,13 +136,15 @@ export function configureNodeQuery(
           );
         }
         if (meta!.relationshipType === 'belongsTo') {
-          const RelatedType = store.modelFor(meta!.modelName)
-          const ALIAS = `${capitalize(meta!.modelName)}NodeOn${ModelConstructor.name}${suffix}`;
-          const fieldQuery  = `
+          const RelatedType = store.modelFor(meta!.modelName);
+          const ALIAS = `${capitalize(meta!.modelName)}NodeOn${
+            ModelConstructor.name
+          }${suffix}`;
+          const fieldQuery = `
             ${ALIAS}: ${meta!.dataKey} {
               ...${RelatedType.name}Fragment
             }
-          `
+          `;
           fields.push(fieldQuery);
         }
       }
@@ -190,47 +181,45 @@ export function confgureOperationDependencies(
   };
 }
 
-
-
 export function configureMutationDependences(node: Node) {
   const NodeType = node.constructor as typeof Node;
   const CFG = NodeType.APOLLO_CONFIG;
-  if (node.isNew){
+  if (node.isNew) {
     return {
       mutationRootFieldName: CFG['createRootField'],
       inputTypeName: CFG['createInputTypeName'],
-    }
+    };
   }
-  if (node.isDeleted){
+  if (node.isDeleted) {
     return {
       mutationRootFieldName: CFG['deleteRootField'],
       inputTypeName: CFG['deleteInputTypeName'],
-    }
+    };
   }
   return {
     mutationRootFieldName: CFG['updateRootField'],
     inputTypeName: CFG['updateInputTypeName'],
-  }
+  };
 }
 
-
 export function configureNodeMutation(
-  store: EADStoreService, 
-  modelName: string, 
-  mutationRootFieldName: string, 
-  prefix: string, 
-  suffix: string, 
-  onlyFields?: string[]
+  store: EADStoreService,
+  modelName: string,
+  mutationRootFieldName: string,
+  prefix: string,
+  suffix: string,
+  onlyFields?: string[],
 ): string {
   const NodeType = store.modelFor(modelName);
   // include all fields by default
-  const fields: string[] = onlyFields ?? Object.values(NodeType.Meta).map(field => field.dataKey);
+  const fields: string[] =
+    onlyFields ?? Object.values(NodeType.Meta).map((field) => field.dataKey);
   const query = `
     ${NodeType.name}${suffix}: ${NodeType.modelName} {
       ${fields.join('\n')}
     } 
-  `
-  const ALIAS = capitalize(mutationRootFieldName) + suffix
+  `;
+  const ALIAS = capitalize(mutationRootFieldName) + suffix;
   const mutation = `
       ${ALIAS}: ${mutationRootFieldName} ( input: $${prefix}input${suffix} ) {
         ${query}
@@ -239,36 +228,3 @@ export function configureNodeMutation(
   return mutation;
 }
 
-
-
-
-export function configureTransformers(
-  store: EADStoreService,
-  modelConstructor: typeof Node,
-) {
-  const Meta = modelConstructor.Meta;
-
-  for (const fieldName in Meta) {
-    if (Meta[fieldName]!.fieldType === 'attribute') {
-      const transformName = (Meta[fieldName] as AttrField)?.transformName;
-      if (transformName) {
-        let transformType: typeof Transform | undefined;
-        transformType = (getOwner(store) as ApplicationInstance).lookup(
-          `ead-transform:${transformName}`,
-        ) as typeof Transform;
-        if (!transformType) {
-          transformType = builtInTransforms[transformName];
-        }
-        assert(
-          `Transform with name "${transformName}" does not exist in the transforms registry!`,
-          transformType,
-        );
-        if (transformType) {
-          Object.assign(modelConstructor.Meta[fieldName] as AttrField, {
-            transform: transformType,
-          });
-        }
-      }
-    }
-  }
-}

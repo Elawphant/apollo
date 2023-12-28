@@ -1,4 +1,3 @@
-import { computed, defineProperty, get, set } from '@ember/object';
 import { assert } from '@ember/debug';
 import {
   type ElementDescriptor,
@@ -6,8 +5,8 @@ import {
 } from 'ember-apollo-data/-private/util';
 import Node from 'ember-apollo-data/model/node';
 import type { AttrField } from './field-mappings';
-import Transform from 'ember-apollo-data/transform';
-
+import { FieldProcessor } from 'ember-apollo-data/field-processor';
+import { notifyPropertyChange } from '@ember/object';
 
 /**
  * A decorator for `Node` properties that configures `Meta` on `Node` prototype.
@@ -16,11 +15,11 @@ import Transform from 'ember-apollo-data/transform';
  * to configure `typeof Node.Meta`, `Node._meta` and set `_meta.getter` and `_meta.setter`
  * on the property on `Node` decorated with `attr`.
  *
- * Defining `transformName` will set the existing respective `Transform` on the `tyepof Node.Meta`
+ * Defining `fieldProcessorName` will set the existing respective `Transform` on the `tyepof Node.Meta`
  * and instance of it on `Node._meta`, effectively making Transforms statefull, which is
  * very useful for JSONField data and other complex data fields.
  *
- * @param { ?string } transformName: the name of the ead-transform.
+ * @param { ?string } fieldProcessorName: the name of the ead-transform.
  *  if none provided, the data will not be transformed.
  *  transforms for `string`, `number` and `boolean` are implemented by default, but can be overwritten by custom transforms;
  * @param { {attrName?: string} } options: the options hash. the hash will be stored in Node's `Meta`;
@@ -28,28 +27,29 @@ import Transform from 'ember-apollo-data/transform';
  * @returns a decorator that sets `Meta` keys and values, and does the transformation.
  */
 function attr(
-  transformName?: string,
+  fieldProcessorName?: string,
   options?: { attrName?: string; defaultValue?: any },
 ): PropertyDecorator;
 function attr(
-  transformName?: string,
+  fieldProcessorName?: string,
   options?: { attrName?: string; defaultValue?: any },
   ...args: [ElementDescriptor[0], ElementDescriptor[1]]
 ): void;
 function attr(
-  transformName?: string,
+  fieldProcessorName?: string,
   options?: { attrName?: string; defaultValue?: any },
   ...args: ElementDescriptor
 ): DecoratorPropertyDescriptor;
 function attr(
-  transformName?: string,
+  fieldProcessorName?: string,
   options?: { attrName?: string; defaultValue?: any },
   ...args: [] | [ElementDescriptor[0], ElementDescriptor[1]] | ElementDescriptor
 ): PropertyDecorator | DecoratorPropertyDescriptor | void {
   assert(
     `Transformer name must be string if provided`,
-    !transformName || (transformName && typeof transformName === 'string'),
+    !fieldProcessorName || (fieldProcessorName && typeof fieldProcessorName === 'string'),
   );
+
 
   return function (target: any, propertyName: string | symbol): any {
     if (!target['Meta']) {
@@ -58,26 +58,26 @@ function attr(
     if (!target.Meta[propertyName]) {
       target.Meta[propertyName] = {
         propertyName: propertyName,
-        transformName: transformName ?? null,
+        fieldProcessorName: fieldProcessorName ?? null,
         fieldType: 'attribute',
         dataKey: options?.attrName ?? propertyName,
         defaultValue: options?.defaultValue ?? null,
         getter: function () {
           // @ts-ignore
           const modelInstance: Node = this;
-          const transformInstance = (
+          const fieldProcessor = (
             modelInstance._meta[propertyName as string] as AttrField
-          ).transform;
-          const data = modelInstance.localState.get(propertyName);
-          if (transformInstance && transformInstance instanceof Transform) {
-            return transformInstance.deserialize(data);
+          ).fieldProcessor;
+          const data = modelInstance.localState.get(propertyName as string);
+          if (fieldProcessor) {
+            return fieldProcessor.deserialize(data);
           }
           return data;
         },
         setter: function (value: any) {
           // @ts-ignore
           const modelInstance: Node = this;
-          modelInstance.localState.set(propertyName, value);
+          modelInstance.localState.set(propertyName as string, value);
         },
       };
     }

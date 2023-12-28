@@ -1,8 +1,8 @@
 
-import Transform from 'ember-apollo-data/transform';
+import FieldProcessor from 'ember-apollo-data/field-processor';
 
 
-export default class <%= classifiedModuleName %>Transform extends Transform {
+export default class <%= classifiedModuleName %>FieldProcessor extends FieldProcessor {
 
   /**
    * Serializes the data to ApolloModel data type

@@ -23,7 +23,7 @@ import type {
 } from '@apollo/client/utilities/policies/pagination';
 import { capitalize, dasherize } from '@ember/string';
 import type { GraphQLError } from 'graphql';
-import { computed, notifyPropertyChange } from '@ember/object';
+import { addObserver, removeObserver } from '@ember/object/observers';
 
 export class Connection {
   @service('ead-store') declare store: EADStoreService;
@@ -66,7 +66,7 @@ export class Connection {
   @tracked
   declare pageInfo: TRelayPageInfo;
 
-  private __table: Map<Node, Edge> = new TrackedMap();
+  private __table: Map<Node, Edge> = tracked(Map);
 
   /**
    * Configures the connection
@@ -157,7 +157,7 @@ export class Connection {
     const suffix = index.toString();
     const prefix = `${ParentNodeType.modelName}_${this.fieldNameOnParent}_`;
     const parentNodeVars = Object.values(
-      configureNodeVariables(ParentNodeType, '', suffix),
+      configureNodeVariables('', suffix),
     ).map(([keyArg, varName]) => `$${keyArg}: ${varName}`);
     const connectionFieldVars = Object.values(
       configureConnectionVariables(ConnectionFieldNodeType, prefix, suffix),
@@ -292,4 +292,16 @@ export class Connection {
       });
     }
   };
+
+  public afterLoading = async (executor: ((...args: any) => any)) => {
+    const instance = this;
+    function executorHandler(){
+      executor();
+      removeObserver(instance, 'isLoading', instance, executorHandler)
+    }
+    if (this.isLoading){
+      addObserver(this, 'isLoading', this, executorHandler);
+    }
+  }
+
 }

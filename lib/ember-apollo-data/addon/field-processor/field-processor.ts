@@ -31,7 +31,7 @@ import { setOwner } from '@ember/application';
  * ```
  * Now Person has access to the apolloDataStore and session services.
  */
-export default class EADTransform {
+export default class FieldProcessor {
   /**
    * Initializes the transform with owner
    * @param { Owner } owner: owner for dependency injection, e.g.

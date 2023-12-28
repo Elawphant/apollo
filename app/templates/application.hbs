@@ -3,8 +3,9 @@
 
 <ul>
   {{#each @model.nodes as |item|}}
-    <li>Domain: {{item.domain}}</li>
     <li>id: {{item.id}}</li>
-    <li>Company: {{item.entrepreneurship.name}}</li>
+    <li>email: {{item.email}}</li>
+    <li>Active: {{item.isActive}}</li>
+    <Input @type="text" @value={{item.email}}></Input>
   {{/each}}
 </ul>

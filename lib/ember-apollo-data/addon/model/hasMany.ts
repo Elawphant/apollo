@@ -17,21 +17,33 @@ import type { OperationVariables } from '@apollo/client';
  */
 function hasMany(
   modelName: string,
-  options?: { attrName?: string },
+  options?: {
+    attrName?: string;
+    fieldProcessorName?: string;
+  },
 ): PropertyDecorator;
 function hasMany(
   modelName: string,
-  options?: { attrName?: string },
+  options?: {
+    attrName?: string;
+    fieldProcessorName?: string;
+  },
   ...args: [ElementDescriptor[0], ElementDescriptor[1]]
 ): void;
 function hasMany(
   modelName: string,
-  options?: { attrName?: string },
+  options?: {
+    attrName?: string;
+    fieldProcessorName?: string;
+  },
   ...args: ElementDescriptor
 ): DecoratorPropertyDescriptor;
 function hasMany(
   modelName: string,
-  options?: { attrName?: string },
+  options?: {
+    attrName?: string;
+    fieldProcessorName?: string;
+  },
   ...args: [] | [ElementDescriptor[0], ElementDescriptor[1]] | ElementDescriptor
 ): PropertyDecorator | DecoratorPropertyDescriptor | void {
   assert(
@@ -51,6 +63,8 @@ function hasMany(
         relationshipType: 'hasMany',
         isClientField: true,
         dataKey: options?.attrName ?? propertyName,
+        fieldProcessorName:
+          options?.fieldProcessorName ?? 'default-connection-relation',
         getter: function () {
           // @ts-ignore
           const node: Node = this;

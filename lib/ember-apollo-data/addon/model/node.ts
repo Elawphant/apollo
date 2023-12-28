@@ -1,13 +1,12 @@
 import { service } from '@ember/service';
 import { computed, get, notifyPropertyChange, set } from '@ember/object';
 import EADStoreService from 'ember-apollo-data/services/ead-store';
-import { transformRegistry } from 'ember-apollo-data/transform-registry';
 import { modelRegistry } from 'ember-apollo-data/model-registry';
 import type { AttrField, RelationshipField } from './field-mappings';
 import { guidFor } from '@ember/object/internals';
 import { assert } from '@ember/debug';
 import type { ApolloConfig } from './meta';
-import { tracked } from '@glimmer/tracking';
+import { tracked } from 'tracked-built-ins';
 import { ApolloError, NetworkStatus, gql } from '@apollo/client';
 import {
   configureNodeFragment,
@@ -18,30 +17,32 @@ import { capitalize, dasherize } from '@ember/string';
 import type { GraphQLError } from 'graphql';
 import { TrackedMap } from 'tracked-built-ins';
 import { Connection } from '.';
+import { type FieldProcessor } from 'ember-apollo-data/field-processor';
+import { addObserver, removeObserver } from '@ember/object/observers';
 
 /**
  * `Node` is a native class responsible for data encapsulation. N.B. `Node` does not extend `EmberObject`.
  * A NodeType extending `Node` must be instanteated via `store`.
- * 
+ *
  * fields of `Node` are decorated via `@attr`, `@belongsTo` & `@hasMany` decorators.
  * Those decorators configure getters and setters that retrieve or modify data from apollo cache,
  * thus the `Node` is just an encapsulation layer on top of apollo cache.
- * 
+ *
  * To configure a NodeType, `static APOLLO_CONFIG` property must be defined. See example below.
- * 
+ *
  * Example:
  * ```
  * import { Node, attr, hasMany, type ApolloConfig, type Connection } from 'ember-apollo-data/model';
  * import type Publisher from './publisher';
- * 
+ *
  * export default class Book extends Node {
  *  @attr('string', { defaultValue: 'Unnamed Book' })
- *  declare name: string; 
+ *  declare name: string;
  *  @hasMany('author')
  *  declare authorConnection: Connection; // Author Connection
  *  @belongsTo('publisher')
- *  declare publisher: Publisher // Publisher node 
- *  
+ *  declare publisher: Publisher // Publisher node
+ *
  *  static APOLLO_CONFIG: ApolloConfig = {
  *    queryRootField: 'book',
  *    createRootField: 'createBook',
@@ -54,10 +55,11 @@ import { Connection } from '.';
  * }
  * ```
  * Now to instantiate it, we call `store.node('book', {id: "RXNob3A6UmpWMmpraWVwRTJyb1BheVlmU3JvOQ=="})`;
- * If we are creating a new record node instance, the `store.create(modelName) must be used, 
+ * If we are creating a new record node instance, the `store.create(modelName) must be used,
  * which will automatically set the defaultData on the new Node instance.
  */
 export default class Node {
+  [key: string]: any;
   private declare _id: string;
 
   public get id() {
@@ -111,16 +113,20 @@ export default class Node {
   }
 
   public identifyNode = (id: string) => {
-    assert(`Node can be assigned only string type id!`, id && typeof id === "string");
+    assert(
+      `Node can be assigned only string type id!`,
+      id && typeof id === 'string',
+    );
     if (id && !this._id) {
       this._id = id;
     }
     // also sync data with local state
-    this.syncData()
+    this.syncData();
   };
 
   constructor() {
     this.__LOCAL_ID = guidFor(this);
+    this.localState = tracked(Map);
   }
 
   /**
@@ -135,7 +141,11 @@ export default class Node {
   };
 
   public rollbackAttributes = () => {
-    //
+    if (this._id) {
+      this.syncData();
+    } else {
+      this.setDefaultData()
+    }
   };
 
   public CONFIGURE_DEFAULT_DATA = () => {
@@ -153,68 +163,70 @@ export default class Node {
     const mutationData: Record<string, any> = {};
     // Create the data object from the instance
     Object.values(this._meta).forEach((field) => {
-      if (field.fieldType === 'attribute') {
-        mutationData[field.dataKey] = this[field.propertyName as keyof Node];
-      }
+      const fieldProcessor = (this._meta[field.propertyName] as AttrField | RelationshipField)
+        .fieldProcessor as FieldProcessor;
+      mutationData[field.dataKey] = fieldProcessor
+        ? fieldProcessor.serialize(this[field.propertyName])
+        : this[field.propertyName];
     });
     return mutationData;
   };
 
-  // public serialize = (options?: { includeId: boolean }): Object => {
-  //   let data: any = {};
-
-  //   // TODO implement identifiers
-  //   const identifierFields: string[] = [];
-  //   Object.values(this._meta).forEach(field => {
-
-  //     if (field.fieldType === "attribute") {
-
-  //       if ((identifierFields.includes(field.propertyName) && options?.includeId) || !identifierFields.includes(field.propertyName)){
-  //         set(data, field.dataKey, get(this, field.propertyName));
-  //       }
-  //     }
-  //   });
-  //   return data;
-  // }
-
-  private syncData = () => {
-    assert(`Cannot SyncData with non persisted object.`, this._id);
-    if (this._id){
-      const fragment = configureNodeFragment(
-        this.store,
-        this.constructor as typeof Node,
-      );
-      const data = this.store.client.readFragment({
-        id: this.store.client.cache.identify({
-          __typename: this.constructor.name,
-          id: this.id,
-        })!,
-        fragment: gql(fragment),
-      });
-      Object.values(this._meta).forEach(field => {
-        // reassign attrs and belongsTos
-        if (field.fieldType === "attribute" || field.fieldType === "relationship" && field.relationshipType === "belongsTo") {
-          this.localState.set(field.propertyName, data[field.dataKey]);
-        } 
-        // repopulate connection relations
-        // since connection field is a function that returns a connection with queryOptions, that instantiates a connection,
-        // we must find the connections in the store and query on them to update them too.
-        Object.values(this.store.CONNECTIONS).forEach(connection => {
-          if (connection.parentNode && connection.parentNode.id === this.id){
-            connection.query();
-          }
-        })
-      })
+  public afterLoading = (executor: ((...args: any) => any)) => {
+    const instance = this;
+    function executorHandler(){
+      removeObserver(instance, 'isLoading', instance, executorHandler);
+      executor();
+    }
+    if (this.isLoading){
+      addObserver(this, 'isLoading', this, executorHandler);
+    } else {
+      executor()
     }
   }
 
-  public localState = new TrackedMap();
+  private syncData = () => {
+    assert(`Cannot SyncData with non persisted object.`, this._id);
+    if (this.isLoading) {
+      this.syncData();
+    } else {
+      if (this._id) {
+        const NodeType = this.constructor as typeof Node
+        const fragment = configureNodeFragment(
+          this.store,
+          NodeType,
+        );
+        const data = this.store.client.readFragment({
+          id: this.store.client.cache.identify({
+            __typename: this.constructor.name,
+            id: this.id,
+          })!,
+          fragment: gql(fragment),
+        });
+        Object.values(NodeType.Meta).forEach((field) => {
+          // reassign attrs and belongsTos
+          if (field.fieldType === 'attribute') {
+            this.localState.set(field.propertyName as string, data ? data[field.dataKey] : undefined);
+          }
+          // since relations are lazy
+          // we must find the connections and nodes in the store and query on them to update them too.
+          Object.values(this.store.CONNECTIONS).forEach((connection) => {
+            if (connection.parentNode && connection.parentNode.id === this.id) {
+              connection.query();
+            }
+          });
+        });
+      }
+    }
+  };
+
+  declare public localState:Map<string, any>;
 
   @tracked
   isLoading: boolean = false;
 
   @tracked
-  declare networkStatus: NetworkStatus;
+  declare networkStatus?: NetworkStatus;
 
   @tracked
   declare errors?: GraphQLError[];
@@ -222,13 +234,51 @@ export default class Node {
   @tracked
   declare error?: ApolloError;
 
-  public resetErrors = () => {
+  public resetState = () => {
     this.error = this.errors = undefined;
+    this.isLoading = false;
+    this.syncData()
   };
 
+  query = async () => {
+    if (this._id) {
+      this.resetState();
+      this.isLoading = true;
+      const NodeType = this.constructor as typeof Node;
+      const query = configureNodeQuery(this.store, NodeType.modelName);
+      const fragment = configureNodeFragment(this.store, NodeType)
+      const operation = `
+          ${fragment}
+          query ${NodeType.name}NodeQueryOperation ($id: ID!) {
+            ${query}
+          }
+        `
+      const { data, error, errors, loading, networkStatus, partial } = await this.store.client.query({
+        query: gql(operation),
+        variables: {
+          id: this._id,
+        }
+      });
+      this.networkStatus = networkStatus;
+      this.isLoading = loading;
+
+      // TODO maybe implement error encapsulation
+      this.error = error;
+      this.errors = errors as unknown as GraphQLError[];
+
+      if (data) {
+        this.resetState();
+        // this.syncData();
+      }
+
+    }
+
+  }
+
   queryAsRelation = async (parentNode: Node, fieldNameOnParent: string) => {
+    this.resetState();
     const ParentType = parentNode.constructor as typeof Node;
-    const RelationType = (this.constructor as typeof Node);
+    const RelationType = this.constructor as typeof Node;
     const query = configureNodeQuery(
       this.store,
       ParentType.modelName,
@@ -236,9 +286,9 @@ export default class Node {
       '0',
       [fieldNameOnParent],
     );
-    const fieldFragment = configureNodeFragment(this.store, RelationType)
+    const fieldFragment = configureNodeFragment(this.store, RelationType);
     const parentVariables = Object.values(
-      configureNodeVariables(ParentType, "", "0"),
+      configureNodeVariables('', '0'),
     )
       .map(([keyArg, scalar]) => {
         return `$${keyArg}: ${scalar}`;
@@ -246,8 +296,7 @@ export default class Node {
       .join(', ');
     const operation = `
       ${fieldFragment}
-      query ${capitalize(fieldNameOnParent)}On${
-        ParentType.name
+      query ${capitalize(fieldNameOnParent)}On${ParentType.name
       }QueryOperation (${parentVariables}) {
         ${query}
       }
@@ -268,22 +317,21 @@ export default class Node {
 
     if (data) {
       // remove previous errors
-      this.resetErrors();
+      this.resetState();
       const parentData = data[Object.keys(data)[0]!];
-      const fieldData = parentData[`${RelationType.name}NodeOn${ParentType.name}0`];
+      const fieldData =
+        parentData[`${RelationType.name}NodeOn${ParentType.name}0`];
       this.identifyNode(fieldData.id);
     }
   };
 
-
   public setDefaultData = () => {
     Object.values(this._meta).forEach((field) => {
       if (field.fieldType === 'attribute') {
-        this.localState.set(field.propertyName, field.defaultValue);
+        this.localState.set(field.propertyName as string, field.defaultValue);
       }
     });
-
-  }
+  };
   /**
     If this property is `true` the record is in the `dirty` state. The
     record has local changes that have not yet been saved by the
@@ -475,7 +523,7 @@ export default class Node {
   public static get attributes(): Map<
     string,
     {
-      type: keyof typeof transformRegistry;
+      type: string;
       isAttribute: boolean;
       options: Object;
       name: string;
@@ -499,7 +547,7 @@ export default class Node {
 
   public static get transformedAttributes(): Map<
     keyof Node,
-    keyof typeof transformRegistry
+    string
   > {
     const map = new Map();
     this.attributes.forEach((attribute, name) => {

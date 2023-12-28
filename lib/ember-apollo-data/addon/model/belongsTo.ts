@@ -8,25 +8,37 @@ import type {
 } from 'ember-apollo-data/-private/util';
 
 /**
- * 
+ *
  */
 function belongsTo(
   modelName: string,
-  options?: { attrName?: string },
+  options?: {
+    attrName?: string;
+    fieldProcessorName?: string;
+  },
 ): PropertyDecorator;
 function belongsTo(
   modelName: string,
-  options?: { attrName?: string },
+  options?: {
+    attrName?: string;
+    fieldProcessorName?: string;
+  },
   ...args: [ElementDescriptor[0], ElementDescriptor[1]]
 ): void;
 function belongsTo(
   modelName: string,
-  options?: { attrName?: string },
+  options?: {
+    attrName?: string;
+    fieldProcessorName?: string;
+  },
   ...args: ElementDescriptor
 ): DecoratorPropertyDescriptor;
 function belongsTo(
   modelName: string,
-  options?: { attrName?: string },
+  options?: {
+    attrName?: string;
+    fieldProcessorName?: string;
+  },
   ...args: [] | [ElementDescriptor[0], ElementDescriptor[1]] | ElementDescriptor
 ): PropertyDecorator | DecoratorPropertyDescriptor | void {
   assert(
@@ -46,12 +58,18 @@ function belongsTo(
         relationshipType: 'belongsTo',
         isClientField: true,
         dataKey: options?.attrName ?? propertyName,
+        fieldProcessorName:
+          options?.fieldProcessorName ?? 'default-node-relation',
         getter: function () {
           // @ts-ignore
           const modelInstance: Node = this;
           // return the local state if parent is created or the relation is modified
-          if (modelInstance.localState.get(propertyName) !== undefined || modelInstance.isNew) {
-            return modelInstance.localState.get(propertyName);
+          const prop = propertyName as string;
+          if (
+            modelInstance.localState.get(prop) !== undefined ||
+            modelInstance.isNew
+          ) {
+            return modelInstance.localState.get(prop);
           }
           const relation = modelInstance.store.node(modelName, {});
           relation.queryAsRelation(
@@ -63,7 +81,7 @@ function belongsTo(
         setter: function (value: Node | null) {
           // @ts-ignore
           const modelInstance: Node = this;
-          modelInstance.localState.set(propertyName, value);
+          modelInstance.localState.set(propertyName as string, value);
         },
       } as RelationshipField;
     }

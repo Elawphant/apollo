@@ -9,6 +9,9 @@ export default class User extends Node {
   @attr('string')
   declare email: string;
 
+  @attr('boolean')
+  declare isActive: boolean;
+
   static APOLLO_CONFIG: ApolloConfig = {
     queryRootField: 'user',
     createRootField: 'createUser',
@@ -16,6 +19,6 @@ export default class User extends Node {
     deleteRootField: 'deleteUser',
     createInputTypeName: 'UserCreateMutationInput',
     updateInputTypeName: 'UserUpdateMutationInput',
-    deleteInputTypeName: 'USerDeleteMutationInput',
+    deleteInputTypeName: 'UserDeleteMutationInput',
   };
 }

@@ -16,17 +16,18 @@ import {
   type TypePolicies,
   type ApolloClientOptions,
   type OperationVariables,
+  ApolloError,
 } from '@apollo/client';
-import { dasherize } from '@ember/string';
+import { capitalize, dasherize } from '@ember/string';
 import { pluralize } from 'ember-inflector';
-import { get, set } from '@ember/object';
+import { computed, get, set } from '@ember/object';
 import {
   configureNodeFragment,
   configureModelConstructor,
   configureConnectionQuery,
-  configureTransformers,
   configureNodeMutation,
   configureMutationDependences,
+  configureNodeQuery,
 } from 'ember-apollo-data/-private/configurators';
 import { relayStylePagination } from '@apollo/client/utilities';
 import { PaginationKeyArgs } from 'ember-apollo-data/queries/pagination';
@@ -36,6 +37,8 @@ import type {
   RelationshipField,
 } from 'ember-apollo-data/model/field-mappings';
 import { Connection } from 'ember-apollo-data/model';
+import { type FieldProcessor } from 'ember-apollo-data/field-processor';
+import { DefaultFieldProcessors } from 'ember-apollo-data/field-processors/default-field-processors';
 
 const apollo_client_destructor = (destroyable: EADStoreService) => {
   if (
@@ -82,24 +85,36 @@ export default class EADStoreService extends Service {
   };
 
   public node = (modelName: string, data?: any): Node => {
+    const NodeType = this.modelFor(modelName);
+    const nodeId: string | undefined = data ? data['id'] : undefined;
     let node: Node | undefined;
-    const constructor = this.modelFor(modelName);
 
     // try to get the same node encapsulator
-    const nodeId: string | undefined = data ? data['id'] : undefined;
     if (nodeId) {
       node = this.NODES.get(nodeId);
     }
     // initialize a new encapsulator
     if (!node) {
-      node = this.INITIALIZE_MODEL_INSTANCE(constructor);
-      if (nodeId) {
-        node.identifyNode(nodeId);
-      }
+      node = this.INITIALIZE_MODEL_INSTANCE(NodeType);
       node = this.KEEP_RECORD(node);
+    }
+    if (nodeId) {
+      node!.identifyNode(nodeId);
+      const fragment = configureNodeFragment(this, NodeType)
+      const exists = this.client.readFragment({
+        id: this.client.cache.identify({
+          __typename: NodeType.name,
+          id: nodeId,
+        }),
+        fragment: gql(fragment),
+      });
+      if (!exists){
+        node!.query();
+      }
     }
     return node!;
   };
+
 
   /**
    * No cache config is allowed. It is preconfigured, otherwise we get weird cache behavior
@@ -199,51 +214,73 @@ export default class EADStoreService extends Service {
     return policies;
   };
 
-  public save = async (
-    saveables: Node[],
-    onlyFields?: string[]
-  ) => {
+  public save = async (saveables: Node[], onlyFields?: string[]) => {
     const map: {
-      [key:string]: {
-        mutation: string,
-        data: any
-        inputTypeName: string
-      }
+      [key: string]: {
+        mutation: string;
+        data: any;
+        inputTypeName: string;
+        node: Node;
+      };
     } = {};
     saveables.forEach((node, index) => {
-      const { inputTypeName, mutationRootFieldName } = configureMutationDependences(node);
-      const suffix = index.toString()
-      const mutation = configureNodeMutation(this, node.__modelName__, mutationRootFieldName, "", suffix, onlyFields);
+      const { inputTypeName, mutationRootFieldName } =
+        configureMutationDependences(node);
+      const suffix = index.toString();
+      const mutation = configureNodeMutation(
+        this,
+        node.__modelName__,
+        mutationRootFieldName,
+        '',
+        suffix,
+        onlyFields,
+      );
       const data = {
-        ['input'+suffix]: {
+        ['input' + suffix]: {
           clientMutationId: node.id,
-          data: node.serialize()
-        }
-      }
+          data: node.serialize(),
+        },
+      };
       map[node.id] = {
-        mutation: mutation, 
+        mutation: mutation,
         data: data,
         inputTypeName: inputTypeName,
+        node: node
       };
     });
-    const operationVars = Object.values(map).map(({mutation, data, inputTypeName}, index) => {
-      return `$input${index}: ${inputTypeName}!`
-    }).join(", ");
-    const mutations = Object.values(map).map(({mutation, data, inputTypeName}) => mutation).join('\n');
+    const operationVars = Object.values(map)
+      .map(({ mutation, data, inputTypeName }, index) => {
+        return `$input${index}: ${inputTypeName}!`;
+      })
+      .join(', ');
+    const mutations = Object.values(map)
+      .map(({ mutation, data, inputTypeName }) => mutation)
+      .join('\n');
     const operation = `
       mutation MutationOperation(${operationVars}) {
         ${mutations}
       }
-    `
-    saveables.map(node => {
-      node.isLoading = true
+    `;
+    saveables.map((node) => {
+      node.isLoading = true;
     });
-    const variables = Object.assign({}, ...Object.values(map).map(({mutation, data, inputTypeName}) => data));
-    const { data, errors } = await this.client.mutate({
+    const variables = Object.assign(
+      {},
+      ...Object.values(map).map(({ mutation, data, inputTypeName }) => data),
+    );
+    this.client.mutate({
       mutation: gql(operation),
-      variables: variables
+      variables: variables,
+    }).then((data) => {
+      // update nodes and connections
+      Object.values(data).forEach((dataField: any) => {
+        const { clientMutationId, ...nodeData } = dataField;
+        const node = map[clientMutationId]!.node;
+        node.identifyNode(nodeData.id);
+      });
+    }).catch((failure) => {
+      // TODO! implement errors
     });
-    console.log(data, errors);
   };
 
   // options are configured in your environment.js.
@@ -290,13 +327,11 @@ export default class EADStoreService extends Service {
     );
     const shimInstance = new RawModelConstructor();
     const constructor = configureModelConstructor(shimInstance, modelName);
-    configureTransformers(this, constructor);
+    // configureTransformers(this, constructor);
     // add the type policy to the apollo cache.
     this.ADD_TYPE_POLICIES([constructor]);
     return constructor;
   };
-
-
 
   private INITIALIZE_MODEL_INSTANCE = (ModelConstructor: typeof Node): Node => {
     // initialize a node instance. at this point, it has no owner, no fragment, no fields
@@ -304,30 +339,38 @@ export default class EADStoreService extends Service {
     // set owner
     const Meta = model.constructor.prototype.Meta;
     setOwner(model, getOwner(this));
-    const getterConfigurator = (fieldName: string) => {
-      return Meta[fieldName]!.getter;
-    };
-    const setterConfigurator = (fieldName: string) => {
-      return Meta[fieldName]!.setter;
-    };
     // pass the consturctor.Meta to instance._meta
     model._meta = Meta;
     Object.keys(Meta).forEach((fieldName) => {
       const propertyName: string = Meta[fieldName]!.propertyName;
-
-      if (Meta[fieldName].fieldType === 'attribute') {
-        // initialize a transform on _meta
-        (model._meta[fieldName] as AttrField).transform = new Meta[
-          fieldName
-        ]!.transform(getOwner(this))!;
+      if (Meta[fieldName].fieldProcessorName) {
+        // Lookup for defined field processor in field processors 
+        let Processor = getOwner(this)
+          .lookup(`field-processor:${Meta[fieldName].fieldProcessorName}`) as typeof FieldProcessor | undefined;
+        // Try looking up in default field processors
+        if (!Processor) {
+          Processor = DefaultFieldProcessors[Meta[fieldName].fieldProcessorName];
+        }
+        assert(
+          `No field processor with name "${Meta[fieldName].fieldProcessorName}" was found.`,
+          Processor
+        );
+        if (Processor) {
+          // initialize a field processor and set it on _meta
+          (model._meta[fieldName] as AttrField).fieldProcessor = new Processor(getOwner(this))!;
+        }
       }
+      
+      // const { getter, setter } = trackedData<T, K>(key, desc && desc.initializer);
+
       // define property getters and setter on the instance
       Object.defineProperty(model, propertyName, {
-        get: getterConfigurator(propertyName).bind(model),
-        set: setterConfigurator(propertyName as string).bind(model),
-        enumerable: true,
-        configurable: false,
-      });
+          get: Meta[propertyName]!.getter,
+          set: Meta[propertyName]!.setter,
+          enumerable: true,
+          configurable: true,
+        }
+      );
     });
     // at this point our model encapsulates the data in apollo cache and is ready take off.
     return model;

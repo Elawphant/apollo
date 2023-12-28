@@ -9,7 +9,7 @@ export interface ApolloConfig {
   createInputTypeName: string;
   updateInputTypeName: string;
   deleteInputTypeName: string;
-  
+
   keyArgs?: Record<string, string>;
   inputFieldName?: string;
 }

@@ -1,11 +1,10 @@
-import { transformRegistry } from 'ember-apollo-data/transform-registry';
+import type { DefaultFieldProcessors } from 'ember-apollo-data/field-processors/default-field-processors';
 import EADModel from './node';
-import { modelRegistry } from 'ember-apollo-data/model-registry';
-import type Transform from 'ember-apollo-data/transform';
+import { FieldProcessor } from 'ember-apollo-data/field-processor';
 
 /**
  * @prop { keyof EADModel } propertyName: the property name on EADModel
- * @prop { (keyof TransformRegistry); } transformName: the name of the transformer or null if data is not transformed/ encapsulated
+ * @prop { (keyof TransformRegistry); } fieldProcessorName: the name of the transformer or null if data is not transformed/ encapsulated
  * @prop { "attribute" } fieldType: kind of field: always "attribute"
  * @prop { { attrName?: string } } options: the options passed to the attr decorator
  * @prop { string } dataKey: the property name on the data that was serialized to field same as propertyName if options.attrName is undefined
@@ -13,7 +12,7 @@ import type Transform from 'ember-apollo-data/transform';
  */
 export interface AttrField {
   propertyName: keyof EADModel;
-  transformName: keyof typeof transformRegistry | null;
+  fieldProcessorName: string | null;
   fieldType: 'attribute';
   options: {
     attrName?: string;
@@ -21,7 +20,7 @@ export interface AttrField {
   dataKey: string;
   defaultValue: any;
   isClientField?: boolean;
-  transform?: typeof Transform | Transform;
+  fieldProcessor?: FieldProcessor;
   getter: () => any;
   setter: (value: any) => void;
 }
@@ -39,6 +38,8 @@ export interface RelationshipField {
   modelName: string;
   fieldType: 'relationship';
   relationshipType: 'hasMany' | 'belongsTo';
+  fieldProcessorName: string | null;
+  fieldProcessor?: FieldProcessor;
 
   // CONSIDER removing inverse, as we opt for implicit inverses as apollodata comes in, not to overwhelm the ember app
   dataKey: string;

@@ -1,6 +1,6 @@
-import Transform from 'ember-apollo-data/transform/transform';
+import FieldProcessor from 'ember-apollo-data/field-processor/field-processor';
 
-export default class NumberTransform extends Transform {
+export default class NumberFieldProcessor extends FieldProcessor {
   /**
    * Serializes the data to ApolloModel data type
    * Use this method when encapsulating response data
