@@ -24,8 +24,9 @@ import type {
 import { capitalize, dasherize } from '@ember/string';
 import type { GraphQLError } from 'graphql';
 import { addObserver, removeObserver } from '@ember/object/observers';
+import { Queryable } from './queryable';
 
-export class Connection {
+export class Connection extends Queryable {
   @service('ead-store') declare store: EADStoreService;
 
   declare parentNode?: Node;
@@ -66,7 +67,7 @@ export class Connection {
   @tracked
   declare pageInfo: TRelayPageInfo;
 
-  private __table: Map<Node, Edge> = tracked(Map);
+  private __internalReferences: Map<Node, Edge> = tracked(Map);
 
   /**
    * Configures the connection
@@ -88,23 +89,24 @@ export class Connection {
     this.query();
   };
 
-  get id(): string {
+  get CLIENT_ID(): string {
     return identifyObject({
       modelName: this.modelName,
       queryParams: this.queryParams,
-      parentNodeId: this.parentNode?.id ?? null,
+      parentNodeId: this.parentNode?.id,
+      fieldNameOnParent: this.fieldNameOnParent,
     });
   }
 
   get edges(): Edge[] {
-    return Array.from(this.__table).map(([node, edge]) => {
+    return Array.from(this.__internalReferences).map(([node, edge]) => {
       return edge;
     });
   }
 
   get nodes(): Node[] {
     const nodes = [
-      ...Array.from(this.__table).map(([node, edge]) => node),
+      ...Array.from(this.__internalReferences).map(([node, edge]) => node),
       ...this.__addedNodes,
     ].filter((node) => !this.__removedNodes.includes(node));
     return nodes;
@@ -133,8 +135,8 @@ export class Connection {
     const operation = `
       ${fragment}
       query ${this.NodeType.name}ConnectionQueryOperation (${variables.join(
-        ', ',
-      )}) {
+      ', ',
+    )}) {
       ${query}
       }
     `;
@@ -150,7 +152,7 @@ export class Connection {
     const ConnectionFieldNodeType = this.store.modelFor(
       (
         ParentNodeType.Meta[
-          this.fieldNameOnParent as string
+        this.fieldNameOnParent as string
         ] as RelationshipField
       ).modelName,
     );
@@ -177,8 +179,7 @@ export class Connection {
     );
     const operation = `
       ${connectionTypeFragment}
-      query ${capitalize(this.fieldNameOnParent)}On${
-        ParentNodeType.name
+      query ${capitalize(this.fieldNameOnParent)}On${ParentNodeType.name
       }QueryOperation (${[...parentNodeVars, ...connectionFieldVars].join(
         ', ',
       )}) {
@@ -198,12 +199,13 @@ export class Connection {
     this.error = this.errors = undefined;
   };
 
-  public query = async () => {
+  public query = async (): Promise<void> => {
     this.isLoading = true;
     this.parentNode ? this.queryAsRelation() : this.queryAsRootConnection();
   };
 
-  encapsulate = (connection: {
+
+  private encapsulate = (connection: {
     edges: TRelayEdgeData[];
     pageInfo: TRelayPageInfo;
   }) => {
@@ -214,7 +216,7 @@ export class Connection {
       const edgeInstance = new Edge();
       edgeInstance.configure(otherFields);
       const nodeInstance = this.store.node(dasherize(node['__typename']), node);
-      this.__table.set(nodeInstance, edgeInstance);
+      this.__internalReferences.set(nodeInstance, edgeInstance);
     });
   };
 
@@ -228,22 +230,23 @@ export class Connection {
     assert(
       `
       Connections without parent node should be queried only via 'queryAsRootConnection' method!
-    `,
+      `,
       this.parentNode,
     );
     // No need to query the server, if parentNode is new.
     if (this.parentNode.isNew) {
       return;
-    }
+    };
+    // do not dispatch queries if a query is already dispatched
     const operation = this.configureRelationQueryOperation();
-    const { data, errors, error, loading, networkStatus, partial } =
-      await this.store.client.query({
+    const promise = this.registerQuery(this.store.client.query({
         query: gql(operation),
         variables: {
           id0: this.parentNode.id,
           ...this.queryParams,
         },
-      });
+      }));
+    const { data, errors, error, loading, networkStatus, partial } = await promise;
     this.networkStatus = networkStatus;
     this.isLoading = loading;
 
@@ -259,6 +262,7 @@ export class Connection {
         this.encapsulate(parentData[`${this.NodeType.name}Connection0`]);
       });
     }
+    this.resetQueryInProgress();
   };
 
   private queryAsRootConnection = async () => {
@@ -268,13 +272,12 @@ export class Connection {
     `,
       !this.parentNode,
     );
-
     const operation = this.configureConnectionQueryOperation();
-    const { data, errors, error, loading, networkStatus, partial } =
-      await this.store.client.query({
-        query: gql(operation),
-        variables: this.queryParams,
-      });
+    const promise = this.registerQuery(this.store.client.query({
+      query: gql(operation),
+      variables: this.queryParams,
+    }));
+    const { data, errors, error, loading, networkStatus, partial } = await promise;
     this.networkStatus = networkStatus;
     this.isLoading = loading;
 
@@ -291,17 +294,7 @@ export class Connection {
         this.encapsulate(data[connection]);
       });
     }
+    this.resetQueryInProgress();
   };
-
-  public afterLoading = async (executor: ((...args: any) => any)) => {
-    const instance = this;
-    function executorHandler(){
-      executor();
-      removeObserver(instance, 'isLoading', instance, executorHandler)
-    }
-    if (this.isLoading){
-      addObserver(this, 'isLoading', this, executorHandler);
-    }
-  }
 
 }

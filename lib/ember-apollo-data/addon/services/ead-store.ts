@@ -39,6 +39,8 @@ import type {
 import { Connection } from 'ember-apollo-data/model';
 import { type FieldProcessor } from 'ember-apollo-data/field-processor';
 import { DefaultFieldProcessors } from 'ember-apollo-data/field-processors/default-field-processors';
+import { tracked } from 'tracked-built-ins';
+import InternalStore from 'ember-apollo-data/model/store';
 
 const apollo_client_destructor = (destroyable: EADStoreService) => {
   if (
@@ -52,34 +54,39 @@ const apollo_client_destructor = (destroyable: EADStoreService) => {
 export default class EADStoreService extends Service {
   public declare client: ApolloClient<NormalizedCacheObject>;
 
-  // @tracked
+  private declare internalStore: InternalStore;
+
+
+  @tracked
   public CONNECTIONS = new Map<string, Connection>();
 
-  // @tracked
+  @tracked
   public NODES = new Map<string, Node>();
 
   public connection = (
     modelName: string,
-    queryVariables: OperationVariables,
+    queryParams: any,
     parentNode?: Node,
     fieldNameOnParent?: string,
-  ) => {
-    const key = identifyObject({
+  ): Connection => {
+    const connectionParams = {
       modelName: modelName,
-      variables: queryVariables,
-      relationId: parentNode?.id,
-    })!;
-    let connection = this.CONNECTIONS.get(key);
+      queryParams: queryParams,
+      parentNodeId: parentNode?.id,
+      fieldNameOnParent: fieldNameOnParent,
+    };
+    let connection = this.internalStore.getConection(connectionParams);
     if (!connection) {
       connection = new Connection();
       setOwner(connection, getOwner(this));
       connection.configure(
         modelName,
-        queryVariables,
+        queryParams,
         parentNode,
         fieldNameOnParent,
       );
-      connection = this.KEEP_CONNECTION(connection) as Connection;
+      this.internalStore.addConnection(connection);
+      return this.internalStore.getConection(connectionParams)!;
     }
     return connection!;
   };
@@ -91,15 +98,15 @@ export default class EADStoreService extends Service {
 
     // try to get the same node encapsulator
     if (nodeId) {
-      node = this.NODES.get(nodeId);
+      node = this.internalStore.getNode(nodeId);
     }
     // initialize a new encapsulator
     if (!node) {
       node = this.INITIALIZE_MODEL_INSTANCE(NodeType);
-      node = this.KEEP_RECORD(node);
+      this.internalStore.addNode(node);
     }
     if (nodeId) {
-      node!.identifyNode(nodeId);
+      this.internalStore.identifyNode(node, nodeId)
       const fragment = configureNodeFragment(this, NodeType)
       const exists = this.client.readFragment({
         id: this.client.cache.identify({
@@ -108,11 +115,12 @@ export default class EADStoreService extends Service {
         }),
         fragment: gql(fragment),
       });
-      if (!exists){
+      if (!exists) {
         node!.query();
       }
+      return this.internalStore.getNode(nodeId)!;
     }
-    return node!;
+    return this.internalStore.getNodeByClientId(node.CLIENT_ID)!;
   };
 
 
@@ -140,6 +148,7 @@ export default class EADStoreService extends Service {
   public init(): void {
     super.init();
     this.client = new ApolloClient(this.clientOptions());
+    this.internalStore = new InternalStore();
     registerDestructor(this, apollo_client_destructor);
   }
 
@@ -360,31 +369,22 @@ export default class EADStoreService extends Service {
           (model._meta[fieldName] as AttrField).fieldProcessor = new Processor(getOwner(this))!;
         }
       }
-      
+
       // const { getter, setter } = trackedData<T, K>(key, desc && desc.initializer);
 
       // define property getters and setter on the instance
       Object.defineProperty(model, propertyName, {
-          get: Meta[propertyName]!.getter,
-          set: Meta[propertyName]!.setter,
-          enumerable: true,
-          configurable: true,
-        }
+        get: Meta[propertyName]!.getter,
+        set: Meta[propertyName]!.setter,
+        enumerable: true,
+        configurable: true,
+      }
       );
     });
     // at this point our model encapsulates the data in apollo cache and is ready take off.
     return model;
   };
 
-  private KEEP_RECORD = (instance: Node) => {
-    this.NODES.set(instance.id ?? instance.CLIENT_ID, new Proxy(instance, {}));
-    return this.NODES.get(instance.id ?? instance.CLIENT_ID);
-  };
-
-  private KEEP_CONNECTION = (connection: Connection) => {
-    this.CONNECTIONS.set(connection.id, new Proxy(connection, {}));
-    return this.CONNECTIONS.get(connection.id);
-  };
 }
 
 // Don't remove this declaration: this is what enables TypeScript to resolve

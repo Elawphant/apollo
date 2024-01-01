@@ -19,6 +19,7 @@ import { TrackedMap } from 'tracked-built-ins';
 import { Connection } from '.';
 import { type FieldProcessor } from 'ember-apollo-data/field-processor';
 import { addObserver, removeObserver } from '@ember/object/observers';
+import { Queryable } from './queryable';
 
 /**
  * `Node` is a native class responsible for data encapsulation. N.B. `Node` does not extend `EmberObject`.
@@ -58,12 +59,12 @@ import { addObserver, removeObserver } from '@ember/object/observers';
  * If we are creating a new record node instance, the `store.create(modelName) must be used,
  * which will automatically set the defaultData on the new Node instance.
  */
-export default class Node {
+export default class Node extends Queryable {
   [key: string]: any;
   private declare _id: string;
 
   public get id() {
-    return this._id || this.CLIENT_ID;
+    return this._id;
   }
 
   public set id(id: string) {
@@ -87,11 +88,7 @@ export default class Node {
 
   public declare static APOLLO_CONFIG: ApolloConfig;
 
-  private declare __LOCAL_ID: string;
-
-  public get CLIENT_ID(): string {
-    return this.__LOCAL_ID;
-  }
+  public declare readonly CLIENT_ID: string;
 
   declare static Meta: Record<string, AttrField | RelationshipField>;
 
@@ -125,7 +122,8 @@ export default class Node {
   };
 
   constructor() {
-    this.__LOCAL_ID = guidFor(this);
+    super()
+    this.CLIENT_ID = guidFor(this);
     this.localState = tracked(Map);
   }
 
@@ -172,38 +170,23 @@ export default class Node {
     return mutationData;
   };
 
-  public afterLoading = (executor: ((...args: any) => any)) => {
-    const instance = this;
-    function executorHandler(){
-      removeObserver(instance, 'isLoading', instance, executorHandler);
-      executor();
-    }
-    if (this.isLoading){
-      addObserver(this, 'isLoading', this, executorHandler);
-    } else {
-      executor()
-    }
-  }
-
-  private syncData = () => {
+  private syncData = (fields: string[] = Object.keys(this._meta)) => {
     assert(`Cannot SyncData with non persisted object.`, this._id);
-    if (this.isLoading) {
-      this.syncData();
-    } else {
-      if (this._id) {
-        const NodeType = this.constructor as typeof Node
-        const fragment = configureNodeFragment(
-          this.store,
-          NodeType,
-        );
-        const data = this.store.client.readFragment({
-          id: this.store.client.cache.identify({
-            __typename: this.constructor.name,
-            id: this.id,
-          })!,
-          fragment: gql(fragment),
-        });
-        Object.values(NodeType.Meta).forEach((field) => {
+    if (this._id) {
+      const NodeType = this.constructor as typeof Node
+      const fragment = configureNodeFragment(
+        this.store,
+        NodeType,
+      );
+      const data = this.store.client.readFragment({
+        id: this.store.client.cache.identify({
+          __typename: this.constructor.name,
+          id: this.id,
+        })!,
+        fragment: gql(fragment),
+      });
+      Object.values(NodeType.Meta).forEach((field) => {
+        if (fields.includes(field.propertyName as string)) {
           // reassign attrs and belongsTos
           if (field.fieldType === 'attribute') {
             this.localState.set(field.propertyName as string, data ? data[field.dataKey] : undefined);
@@ -215,12 +198,12 @@ export default class Node {
               connection.query();
             }
           });
-        });
-      }
+        }
+      });
     }
   };
 
-  declare public localState:Map<string, any>;
+  declare public localState: Map<string, any>;
 
   @tracked
   isLoading: boolean = false;
@@ -252,13 +235,14 @@ export default class Node {
           query ${NodeType.name}NodeQueryOperation ($id: ID!) {
             ${query}
           }
-        `
-      const { data, error, errors, loading, networkStatus, partial } = await this.store.client.query({
+        `;
+      const promise = this.registerQuery(this.store.client.query({
         query: gql(operation),
         variables: {
           id: this._id,
         }
-      });
+      }));
+      const { data, error, errors, loading, networkStatus, partial } = await promise;
       this.networkStatus = networkStatus;
       this.isLoading = loading;
 
@@ -268,11 +252,9 @@ export default class Node {
 
       if (data) {
         this.resetState();
-        // this.syncData();
       }
-
     }
-
+    this.resetQueryInProgress();
   }
 
   queryAsRelation = async (parentNode: Node, fieldNameOnParent: string) => {
