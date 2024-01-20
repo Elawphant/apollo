@@ -1,18 +1,13 @@
-import {
-  Node,
-  attr,
-  hasMany,
-  type ApolloConfig,
-} from 'ember-apollo-data/model';
+import { Node, attr, hasMany, type TypeConfig } from 'ember-apollo-data/model';
 import type User from './user';
 
 export default class Entrepreneurship extends Node {
   @attr('string', { defaultValue: 'Anonymouse' })
   declare name: string;
-  @hasMany('user')
+  @hasMany('user', {inverse: 'entreprenurships'})
   declare users: User;
 
-  static APOLLO_CONFIG: ApolloConfig = {
+  static TYPE_CONFIG: TypeConfig = {
     queryRootField: 'entrepreneurship',
     createRootField: 'createEntrepreneurship',
     updateRootField: 'updateEntrepreneurship',

@@ -5,11 +5,10 @@ import StringFieldProcessor from './string';
 import DefaultNodeRelationFieldProcessor from './default-node-relation';
 import DefaultConnectionRelationFieldProcessor from './default-connection-relation';
 
-
 const DefaultFieldProcessors: FieldProcessorRegistryInterface = {
-  'string': StringFieldProcessor,
-  'number': NumberFieldProcessor,
-  'boolean': BooleanTransform,
+  string: StringFieldProcessor,
+  number: NumberFieldProcessor,
+  boolean: BooleanTransform,
   'default-node-relation': DefaultNodeRelationFieldProcessor,
   'default-connection-relation': DefaultConnectionRelationFieldProcessor,
 };

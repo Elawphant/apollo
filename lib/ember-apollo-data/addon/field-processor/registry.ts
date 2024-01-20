@@ -1,5 +1,4 @@
-import { type FieldProcessor } from "./index";
-
+import { type FieldProcessor } from './index';
 
 export interface FieldProcessorRegistryInterface {
   [fieldProcessorName: string]: typeof FieldProcessor;

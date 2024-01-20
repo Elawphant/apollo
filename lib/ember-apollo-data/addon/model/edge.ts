@@ -1,12 +1,14 @@
+import type { TRelayNodeData } from "./node";
+
 export type TRelayEdgeData = {
   __typename?: string;
   cursor?: string;
-  node: Record<string, any>;
+  node: TRelayNodeData;
   [key: string]: any;
 };
 
 export class Edge {
-  configure = (fields: any) => {
+  constructor(fields: any){
     Object.assign(this, fields);
   };
 }

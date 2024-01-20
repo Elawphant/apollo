@@ -1,11 +1,20 @@
 {{page-title "Application"}}
 {{outlet}}
 
-<ul>
-  {{#each @model.nodes as |item|}}
-    <li>id: {{item.id}}</li>
-    <li>email: {{item.email}}</li>
-    <li>Active: {{item.isActive}}</li>
-    <Input @type="text" @value={{item.email}}></Input>
+{{#if @model.isLoading}}
+  {{log "loading"}}
+  loading...
+{{else if @model.isError}}
+  {{#each @model.errors.messages as |error|}}
+    {{error}}
   {{/each}}
-</ul>
+{{else}}
+  <ul>
+    {{#each @model.nodes as |item|}}
+      <li>id: {{item.id}}</li>
+      <li>email: {{item.email}}</li>
+      <li>Active: {{item.isActive}}</li>
+      <Input @type="text" @value={{item.email}}></Input>
+    {{/each}}
+  </ul>
+{{/if}}

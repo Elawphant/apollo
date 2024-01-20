@@ -1,7 +1,7 @@
 /**
  *
  */
-export interface ApolloConfig {
+export interface TypeConfig {
   queryRootField: string;
   createRootField: string;
   updateRootField: string;

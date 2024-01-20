@@ -1,18 +1,22 @@
 import {
   Node,
   attr,
-  type ApolloConfig,
+  type TypeConfig,
   belongsTo,
+  hasMany,
 } from 'ember-apollo-data/model';
+import type Entrepreneurship from './entrepreneurship';
 
 export default class User extends Node {
   @attr('string')
   declare email: string;
+  @hasMany('entrepreneurship', {inverse: "users"})
+  declare entrepreneurships: Entrepreneurship;
 
   @attr('boolean')
   declare isActive: boolean;
 
-  static APOLLO_CONFIG: ApolloConfig = {
+  static TYPE_CONFIG: TypeConfig = {
     queryRootField: 'user',
     createRootField: 'createUser',
     updateRootField: 'updateUser',
@@ -20,5 +24,6 @@ export default class User extends Node {
     createInputTypeName: 'UserCreateMutationInput',
     updateInputTypeName: 'UserUpdateMutationInput',
     deleteInputTypeName: 'UserDeleteMutationInput',
+    keyArgs: {},
   };
 }

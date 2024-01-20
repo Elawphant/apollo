@@ -5,8 +5,6 @@ import {
 } from 'ember-apollo-data/-private/util';
 import Node from 'ember-apollo-data/model/node';
 import type { AttrField } from './field-mappings';
-import { FieldProcessor } from 'ember-apollo-data/field-processor';
-import { notifyPropertyChange } from '@ember/object';
 
 /**
  * A decorator for `Node` properties that configures `Meta` on `Node` prototype.
@@ -47,9 +45,9 @@ function attr(
 ): PropertyDecorator | DecoratorPropertyDescriptor | void {
   assert(
     `Transformer name must be string if provided`,
-    !fieldProcessorName || (fieldProcessorName && typeof fieldProcessorName === 'string'),
+    !fieldProcessorName ||
+    (fieldProcessorName && typeof fieldProcessorName === 'string'),
   );
-
 
   return function (target: any, propertyName: string | symbol): any {
     if (!target['Meta']) {
@@ -62,9 +60,10 @@ function attr(
         fieldType: 'attribute',
         dataKey: options?.attrName ?? propertyName,
         defaultValue: options?.defaultValue ?? null,
-        getter: function () {
+        getter: async function () {
           // @ts-ignore
           const modelInstance: Node = this;
+
           const fieldProcessor = (
             modelInstance._meta[propertyName as string] as AttrField
           ).fieldProcessor;
@@ -72,12 +71,33 @@ function attr(
           if (fieldProcessor) {
             return fieldProcessor.deserialize(data);
           }
+          const fieldState = modelInstance.store.internalStore.stateForField(modelInstance.CLIENT_ID, propertyName as string);
+          if (fieldState.loaded && modelInstance.loaded) {
+            return data;
+          };
+          // query the store for the field as sideEffect
+          if (modelInstance.id) {
+            await modelInstance.store.query([{
+              [(modelInstance.constructor as typeof Node).modelName]: {
+                type: "node",
+                fields: [options?.attrName ?? propertyName as string],
+                variables: {
+                  id: modelInstance.id,
+                }
+              }
+            }]);
+          };
           return data;
         },
         setter: function (value: any) {
           // @ts-ignore
           const modelInstance: Node = this;
           modelInstance.localState.set(propertyName as string, value);
+          modelInstance.store.internalStore.updatefieldState(
+            modelInstance, 
+            propertyName as string, 
+            { changed: true }
+          );
         },
       };
     }

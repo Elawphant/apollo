@@ -1,10 +1,7 @@
 import { Connection } from 'ember-apollo-data/model';
 import { FieldProcessor } from 'ember-apollo-data/field-processor';
 
-
-
 export default class DefaultConnectionRelationFieldProcessor extends FieldProcessor {
-
   serialize = (deserialized: Connection) => {
     throw new Error(`
       DefaultConnectionRelationTransform does not provide any default way to serialize connections, 
@@ -14,6 +11,5 @@ export default class DefaultConnectionRelationFieldProcessor extends FieldProces
       ${deserialized.parentNode} and assign it to ${deserialized.fieldNameOnParent} on 
       "${deserialized.parentNode?.constructor.name} Node" .
     `);
-  }
-
+  };
 }

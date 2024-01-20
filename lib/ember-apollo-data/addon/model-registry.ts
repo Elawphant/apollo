@@ -1,7 +1,5 @@
-import EADModel from './model/node';
+import Node from './model/node';
 
-interface ModelRegistry {
-  [modelName: string]: typeof EADModel;
-}
+type NodeRegistry = Record<string, typeof Node>;
 
-export const modelRegistry: ModelRegistry = {};
+export const NodeRegistry: NodeRegistry = {};

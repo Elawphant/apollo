@@ -1,5 +1,4 @@
-import type Node from "./node";
-
+import type Node from './node';
 
 interface NodeRegistryInterface {
   [modelName: string]: typeof Node;

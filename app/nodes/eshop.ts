@@ -3,18 +3,18 @@ import {
   attr,
   hasMany,
   belongsTo,
-  type ApolloConfig,
+  type TypeConfig,
 } from 'ember-apollo-data/model';
 import type Entrepreneurship from './entrepreneurship';
 
 export default class Eshop extends Node {
-  @belongsTo('entrepreneurship')
+  @belongsTo('entrepreneurship', { inverse: "eshops"})
   declare entrepreneurship: Entrepreneurship;
   @attr('string')
   declare domain: string;
   // Your model code here
 
-  static APOLLO_CONFIG: ApolloConfig = {
+  static TYPE_CONFIG: TypeConfig = {
     queryRootField: 'eshop',
     createRootField: 'createEshop',
     updateRootField: 'updateEshop',

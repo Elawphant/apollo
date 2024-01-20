@@ -1,9 +1,8 @@
-import type { DefaultFieldProcessors } from 'ember-apollo-data/field-processors/default-field-processors';
-import EADModel from './node';
+import Node from './node';
 import { FieldProcessor } from 'ember-apollo-data/field-processor';
 
 /**
- * @prop { keyof EADModel } propertyName: the property name on EADModel
+ * @prop { keyof Node } propertyName: the property name on Node
  * @prop { (keyof TransformRegistry); } fieldProcessorName: the name of the transformer or null if data is not transformed/ encapsulated
  * @prop { "attribute" } fieldType: kind of field: always "attribute"
  * @prop { { attrName?: string } } options: the options passed to the attr decorator
@@ -11,7 +10,7 @@ import { FieldProcessor } from 'ember-apollo-data/field-processor';
  *
  */
 export interface AttrField {
-  propertyName: keyof EADModel;
+  propertyName: string;
   fieldProcessorName: string | null;
   fieldType: 'attribute';
   options: {
@@ -26,22 +25,23 @@ export interface AttrField {
 }
 
 /**
- * @prop { keyof EADModel } propertyName: the property name of the field on the EADModel
- * @prop { keyof ModelRegistry } modelName: the modelName of the **related** EADModel
+ * @prop { string keyof Node } propertyName: the property name of the field on the Node
+ * @prop { string keyof ModelRegistry } modelName: the modelName of the **related** Node
  * @prop { "relationship" } fieldType: always "relationship",
  * @prop { "hasMany" | "belongsTo" } relationshipType: the type of the relationship - "hasMany" or "belongsTo"
- * @prop { { inverse: keyof EADModel } } options: options hash passed to the field
+ * @prop { { inverse: keyof Node } } options: options hash passed to the field
  * @prop { string } dataKey: the property name on the data that was serialized to field same as options.attrName of prop if options.attrName is undefined
  */
 export interface RelationshipField {
-  propertyName: keyof EADModel;
+  propertyName: string;
   modelName: string;
   fieldType: 'relationship';
   relationshipType: 'hasMany' | 'belongsTo';
+
+  inverse: string;
   fieldProcessorName: string | null;
   fieldProcessor?: FieldProcessor;
 
-  // CONSIDER removing inverse, as we opt for implicit inverses as apollodata comes in, not to overwhelm the ember app
   dataKey: string;
   isClientField?: boolean;
   getter: () => any;

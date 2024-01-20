@@ -1,3 +1,5 @@
+import { NodeRegistry } from 'ember-apollo-data/model-registry';
+
 export type DecoratorPropertyDescriptor =
   | (PropertyDescriptor & { initializer?: any })
   | undefined;
@@ -45,7 +47,7 @@ export function computedMacroWithOptionalParams(
       : fn(...(maybeDesc as [object, string, DecoratorPropertyDescriptor?]));
 }
 
-export function identifyObject(obj: any) {
+export function identifyConnection(obj: any) {
   if (typeof obj !== 'object' || obj === null) {
     // Non-object values (primitives, null, etc.)
     return String(obj);
@@ -55,7 +57,7 @@ export function identifyObject(obj: any) {
     // Handle arrays
     const arrayRepresentation: string = obj
       .sort()
-      .map((item) => identifyObject(item))
+      .map((item) => identifyConnection(item))
       .join(',');
     return `[${arrayRepresentation}]`;
   }
@@ -63,8 +65,27 @@ export function identifyObject(obj: any) {
   // Handle objects
   const sortedKeys = Object.keys(obj).sort();
   const objectRepresentation: string = sortedKeys
-    .map((key) => `${key}:${identifyObject(obj[key])}`)
+    .map((key) => `${key}:${identifyConnection(obj[key])}`)
     .join(',');
 
   return `{${objectRepresentation}}`;
 }
+
+/**
+ * ```
+ * {
+ *  type: "node" | "connection";
+ *  fields?: QueryFieldDeclaration[];
+ *  variables?: Object;
+ * }
+ * ```
+ */
+export interface RootQueryDescription {
+  type: 'node' | 'connection';
+  fields?: QueryFieldDeclaration[];
+  variables?: Record<string, any>;
+}
+
+export type QueryFieldDeclaration =
+  | string
+  | Record<string, QueryFieldDeclaration[]>;

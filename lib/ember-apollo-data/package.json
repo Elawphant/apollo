@@ -14,7 +14,7 @@
     "ember-cli-babel": "^7.26.11",
     "ember-cli-typescript": "^5.2.1",
     "ember-fetch": "^8.1.2",
-    "@apollo/client": "^3.8.8",
+    "graphql-request": "^6.1.0",
     "tracked-built-ins": "^3.2.0"
   },
   "devDependencies": {

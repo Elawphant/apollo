@@ -1,4 +1,11 @@
 import FieldProcessor from './field-processor';
-import { FieldProcessorRegistry, type FieldProcessorRegistryInterface } from './registry';
+import {
+  FieldProcessorRegistry,
+  type FieldProcessorRegistryInterface,
+} from './registry';
 
-export { FieldProcessorRegistry, type FieldProcessorRegistryInterface, FieldProcessor };
+export {
+  FieldProcessorRegistry,
+  type FieldProcessorRegistryInterface,
+  FieldProcessor,
+};

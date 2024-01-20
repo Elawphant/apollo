@@ -5,27 +5,16 @@ import {
 } from 'ember-apollo-data/queries/pagination';
 import type EADStoreService from 'ember-apollo-data/services/ead-store';
 import { capitalize } from '@ember/string';
+import type { QueryFieldDeclaration, RootQueryArg } from './util';
+import { assert } from '@ember/debug';
+import type { AttrField, RelationshipField } from 'ember-apollo-data/model/field-mappings';
 
-export function configureModelConstructor(
-  shimInstance: Node,
-  modelName: string,
-): typeof Node {
-  const constructor = shimInstance.constructor as typeof Node;
-  constructor.modelName = modelName;
-
-  // set Meta and let model constructor handle the rest via getters
-  // this line is important.
-  constructor.Meta = shimInstance.constructor.prototype.Meta;
-
-  return constructor;
-}
 
 export function configureConnectionQuery(
   store: EADStoreService,
   modelName: string,
   prefix: string = '',
   suffix = '',
-  rootFieldName?: string,
 ) {
   const NodeType = store.modelFor(modelName);
   const variables = configureConnectionVariables(NodeType, prefix, suffix);
@@ -35,7 +24,7 @@ export function configureConnectionQuery(
   const ALIAS = NodeType.name + 'Connection' + suffix;
   return `
     ${ALIAS}: ${
-      rootFieldName ?? NodeType.APOLLO_CONFIG.queryRootField
+      NodeType.TYPE_CONFIG.queryRootField
     } (${vgql}) {
       edges {
         node {
@@ -63,7 +52,7 @@ export function configureConnectionVariables(
   const PREFIX = prefix;
   const SUFFIX = suffix;
   const keyVars = Object.entries(
-    modelConstructor.APOLLO_CONFIG?.keyArgs || {},
+    modelConstructor.TYPE_CONFIG?.keyArgs || {},
   ).map(([keyArg, scalar]) => {
     return { [keyArg]: [`$${PREFIX + keyArg + SUFFIX}`, scalar] };
   });
@@ -109,12 +98,48 @@ export function configureNodeFragment(
   `;
 }
 
+function verifyFieldAssertions(field: QueryFieldDeclaration, nodeType: typeof Node){
+  if (typeof field === "object"){
+    assert(
+      `Relation sub-fields must be provided in form of Record<string, string[]>`, 
+      Array.isArray(Object.values(field)[0]) 
+    );
+    assert(
+      `Relation sub-fields must not be empty`, 
+      Object.values(field).length > 0
+    );
+    assert(
+      `Relation sub-fields must only have single key-value pair`, 
+      Object.keys(field).length === 1
+    );
+    assert(
+      `No such relation "${field}" on ${nodeType.name}`, 
+      nodeType.Meta[Object.keys(field)[0]!]
+    );
+    assert(
+      `Record<string, string[]> should be used only for relations`, 
+      nodeType.Meta[Object.keys(field)[0]!]!.fieldType === "relationship"
+    );
+
+  } else {
+    assert(
+      `No such attr "${field}" on ${nodeType.name}`, 
+      nodeType.Meta[Object.keys(field)[0]!]
+    );
+    assert(
+      `Non relation fields must be declared with Record<string, string[]> or be omitted.`, 
+      nodeType.Meta[Object.keys(field)[0]!]!.fieldType === "attribute"
+    );
+  }
+}
+
+
 export function configureNodeQuery(
   store: EADStoreService,
   modelName: string,
   prefix: string = '',
   suffix: string = '',
-  onlyFields?: string[],
+  onlyFields?: (string | Record<string, string[]>)[],
   fieldsPrefix: string = '',
   fieldsSuffix: string = '',
 ) {
@@ -122,7 +147,8 @@ export function configureNodeQuery(
   let fields: string[] = [];
   if (onlyFields) {
     onlyFields.forEach((field) => {
-      const meta = ModelConstructor.Meta[field];
+      verifyFieldAssertions(field, ModelConstructor);
+      let meta: AttrField | RelationshipField = typeof field === "object" ? ModelConstructor.Meta[Object.keys(field)[0]!]! : ModelConstructor.Meta[field]!;
       if (meta!.fieldType === 'relationship') {
         if (meta!.relationshipType === 'hasMany') {
           fields.push(
@@ -131,7 +157,6 @@ export function configureNodeQuery(
               meta!.modelName,
               fieldsPrefix,
               fieldsSuffix,
-              meta!.dataKey,
             ),
           );
         }
@@ -183,7 +208,7 @@ export function confgureOperationDependencies(
 
 export function configureMutationDependences(node: Node) {
   const NodeType = node.constructor as typeof Node;
-  const CFG = NodeType.APOLLO_CONFIG;
+  const CFG = NodeType.TYPE_CONFIG;
   if (node.isNew) {
     return {
       mutationRootFieldName: CFG['createRootField'],

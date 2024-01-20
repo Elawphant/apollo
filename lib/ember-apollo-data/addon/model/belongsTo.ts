@@ -1,5 +1,4 @@
 import Node from './node';
-import { set } from '@ember/object';
 import { assert } from '@ember/debug';
 import { type RelationshipField } from './field-mappings';
 import type {
@@ -12,14 +11,16 @@ import type {
  */
 function belongsTo(
   modelName: string,
-  options?: {
+  options: {
+    inverse: string,
     attrName?: string;
     fieldProcessorName?: string;
   },
 ): PropertyDecorator;
 function belongsTo(
   modelName: string,
-  options?: {
+  options: {
+    inverse: string,
     attrName?: string;
     fieldProcessorName?: string;
   },
@@ -27,7 +28,8 @@ function belongsTo(
 ): void;
 function belongsTo(
   modelName: string,
-  options?: {
+  options: {
+    inverse: string,
     attrName?: string;
     fieldProcessorName?: string;
   },
@@ -35,7 +37,8 @@ function belongsTo(
 ): DecoratorPropertyDescriptor;
 function belongsTo(
   modelName: string,
-  options?: {
+  options: {
+    inverse: string,
     attrName?: string;
     fieldProcessorName?: string;
   },
@@ -55,33 +58,42 @@ function belongsTo(
         propertyName: propertyName,
         modelName: modelName,
         fieldType: 'relationship',
+        inverse: options.inverse,
         relationshipType: 'belongsTo',
         isClientField: true,
         dataKey: options?.attrName ?? propertyName,
         fieldProcessorName:
           options?.fieldProcessorName ?? 'default-node-relation',
-        getter: function () {
+        getter: async function () {
           // @ts-ignore
           const modelInstance: Node = this;
-          // return the local state if parent is created or the relation is modified
-          const prop = propertyName as string;
-          if (
-            modelInstance.localState.get(prop) !== undefined ||
-            modelInstance.isNew
-          ) {
-            return modelInstance.localState.get(prop);
-          }
-          const relation = modelInstance.store.node(modelName, {});
-          relation.queryAsRelation(
-            modelInstance,
-            options?.attrName ?? (propertyName as string),
-          );
+          const fieldState = modelInstance.store.internalStore.stateForField(modelInstance.CLIENT_ID, propertyName as string);
+          let relation: Node | null = null;
+          if (fieldState.loaded && modelInstance.loaded){
+            relation = modelInstance.store.internalStore.getRelatedNode(modelInstance.CLIENT_ID, propertyName as string);
+          } else {
+            await modelInstance.store.query([{
+              [(modelInstance.constructor as typeof Node).modelName]: {
+                type: "node",
+                fields: [options?.attrName ?? propertyName as string],
+                variables: {
+                  id: modelInstance.id
+                }
+              }
+            }]);
+          };
           return relation;
         },
         setter: function (value: Node | null) {
           // @ts-ignore
           const modelInstance: Node = this;
-          modelInstance.localState.set(propertyName as string, value);
+          modelInstance.store.internalStore.toBelongsToRelation(modelInstance, propertyName as string, value);
+          modelInstance.store.internalStore.updatefieldState(
+            modelInstance, 
+            propertyName as string, 
+            { changed: true }
+          );
+
         },
       } as RelationshipField;
     }
