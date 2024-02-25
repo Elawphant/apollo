@@ -3,7 +3,7 @@ import {
   PageInfoFields,
   PageInfoArgs,
 } from 'ember-apollo-data/queries/pagination';
-import type EADStoreService from 'ember-apollo-data/services/ead-store';
+import type TirService from 'ember-apollo-data/services/ead-store';
 import { capitalize } from '@ember/string';
 import type { QueryFieldDeclaration, RootQueryArg } from './util';
 import { assert } from '@ember/debug';
@@ -11,7 +11,7 @@ import type { AttrField, RelationshipField } from 'ember-apollo-data/model/field
 
 
 export function configureConnectionQuery(
-  store: EADStoreService,
+  store: TirService,
   modelName: string,
   prefix: string = '',
   suffix = '',
@@ -73,7 +73,7 @@ export function configureNodeVariables(
 }
 
 export function configureNodeFragment(
-  store: EADStoreService,
+  store: TirService,
   modelConstructor: typeof Node,
   prefix: string = '',
   suffix: string = '',
@@ -135,7 +135,7 @@ function verifyFieldAssertions(field: QueryFieldDeclaration, nodeType: typeof No
 
 
 export function configureNodeQuery(
-  store: EADStoreService,
+  store: TirService,
   modelName: string,
   prefix: string = '',
   suffix: string = '',
@@ -189,7 +189,7 @@ export function configureNodeQuery(
 }
 
 export function confgureOperationDependencies(
-  store: EADStoreService,
+  store: TirService,
   NodeType: typeof Node,
   prefix: string = '',
   suffix: string = '',
@@ -228,7 +228,7 @@ export function configureMutationDependences(node: Node) {
 }
 
 export function configureNodeMutation(
-  store: EADStoreService,
+  store: TirService,
   modelName: string,
   mutationRootFieldName: string,
   prefix: string,

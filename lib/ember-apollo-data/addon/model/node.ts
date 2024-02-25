@@ -1,23 +1,21 @@
-import { service } from '@ember/service';
 import { computed, set } from '@ember/object';
-import EADStoreService from 'ember-apollo-data/services/ead-store';
-import { NodeRegistry } from 'ember-apollo-data/model-registry';
+import TirService from 'ember-apollo-data/services/tir';
 import type { AttrField, RelationshipField } from './field-mappings';
-import { guidFor } from '@ember/object/internals';
-import { assert } from '@ember/debug';
 import type { TypeConfig } from './meta';
 import { tracked } from 'tracked-built-ins';
 import { type FieldProcessor } from 'ember-apollo-data/field-processor';
 import { Queryable } from './queryable';
-import type { TRelayConnectionData } from './connection';
+import { assert } from '@ember/debug';
+import { type RootQueryDescription } from 'ember-apollo-data/-private/util';
+import type { NodeRegistry } from './registry';
+import { attr } from '.';
+import { defaultConnectionQuery, defaultNodeQuery } from './utils';
+import type { GraphQlErrorData, TAliasedNodeData } from './types';
+import { clientIdFor } from 'ember-apollo-data/-private/client-id';
+import { BaseType } from './base-type';
+import { configureErrorHandler, type ErrorHandlerType } from './error';
 
 
-
-export interface TRelayNodeData {
-  __typename: string;
-  id: string;
-  [key: string]: any | TRelayNodeData | TRelayConnectionData;
-}
 
 
 /**
@@ -58,26 +56,65 @@ export interface TRelayNodeData {
  * If we are creating a new record node instance, the `store.create(modelName) must be used,
  * which will automatically set the defaultData on the new Node instance.
  */
-export default class Node extends Queryable {
+export default class Node extends BaseType {
+  @attr("id")
+  declare id: string;
+
   [key: string]: any;
-  private declare _id: string;
 
-  public get id() {
-    return this._id;
-  }
-
-  public set id(id: string) {
-    this._id = id;
-  }
+  public get isPartial(): boolean {
+    return this.store.getStateForNodeFields(this.CLIENT_ID);
+  };
 
   declare static modelName: string;
 
-  static isModel: true;
+  public readonly errors: ErrorHandlerType & { errors: Record<string, string[]> };
+
+  get attrFields() {
+    const TYPE = this.constructor as typeof Node
+    return Object.values(TYPE.Meta).map(meta => {
+      if (meta.fieldType === "attribute") {
+        return meta.dataKey;
+      }
+    }).filter(i => i).join("\n")
+  }
+
+  static nodeQuery: string = defaultNodeQuery(this);;
+
+  static connectionQuery: string = defaultConnectionQuery(this);
+
+  static get isModel(): boolean {
+    return true;
+  };
 
   // TODO rename TYPE_CONFIG to something else
   public declare static TYPE_CONFIG: TypeConfig;
 
-  public declare readonly CLIENT_ID: string;
+  public static get GraphQL(): {
+    queries: {
+      node: string;
+      connection: string;
+      [key: string]: string | undefined;
+    },
+    mutations: {
+      [key: string]: string | undefined;
+    },
+    subscriptions: {
+      [key: string]: string | undefined;
+    }
+  } {
+    return {
+      queries: {
+        node: defaultNodeQuery(this),
+        connection: defaultConnectionQuery(this),
+      },
+      mutations: {},
+      subscriptions: {},
+    }
+  }
+
+
+  declare public readonly CLIENT_ID: string;
 
   declare static Meta: Record<string, AttrField | RelationshipField>;
 
@@ -85,22 +122,16 @@ export default class Node extends Queryable {
 
   public declare __typename: string;
 
-  // TODO instead implement storeFor to get the store that extends this store
-  @service('ead-store')
-  declare store: EADStoreService;
+  declare store: TirService;
 
+  // TODO, remove, since we it is in the internal store now
   private declare __LOCAL_DATA: Object;
 
-  public identifyNode = (id: string) => {
-    if (id && !this._id) {
-      this._id = id;
-    }
-  };
-
-  constructor() {
-    super();
-    this.CLIENT_ID = guidFor(this);
+  constructor(store: TirService) {
+    super(store);
     this.localState = tracked(Map);
+    this.CLIENT_ID = clientIdFor((this.constructor as typeof Node).modelName);
+    this.errors = configureErrorHandler((this.constructor as typeof Node).Meta)
   }
 
   /**
@@ -153,13 +184,6 @@ export default class Node extends Queryable {
 
   public resetState = () => {
     this.errors.clear();
-  };
-
-  query = async () => {
-    //TODO Implement using store.query
-    if (this._id) {
-      this.resetState();
-    }
   };
 
   public setDefaultData = () => {
@@ -231,6 +255,7 @@ export default class Node extends Queryable {
   public isSaving: boolean = false;
 
   /**
+   * TODO review
     If this property is `true` the record is in the `deleted` state
     and has been marked for deletion. When `isDeleted` is true and
     `hasDirtyAttributes` is true, the record is deleted locally but the deletion
@@ -294,7 +319,7 @@ export default class Node extends Queryable {
     @readOnly
   */
   public get isNew() {
-    return !this._id;
+    return !this.id;
   }
 
   /**
@@ -351,8 +376,7 @@ export default class Node extends Queryable {
   public toString() {
     // when used with store.modelFor, the constructor's modelName is set the keyof ModelRegistry for the target's prototype
     // this adheres to ember data's approach to require instantiation of model classes via store.modelFor
-    return `<ead-model:${(this.constructor as typeof Node).modelName as string
-      }:${this.CLIENT_ID}>`;
+    return `<ead-model:${this.CLIENT_ID}>`;
   }
 
   // TODO consider removing
@@ -398,7 +422,7 @@ export default class Node extends Queryable {
     {
       key: keyof Node;
       kind: 'hasMany' | 'belongsTo';
-      type: keyof typeof NodeRegistry;
+      type: keyof NodeRegistry;
       options: Object;
       isRelationship: boolean;
     }
@@ -418,7 +442,7 @@ export default class Node extends Queryable {
   }
 
   public static get relationships(): Map<
-    keyof typeof NodeRegistry,
+    keyof NodeRegistry,
     {
       name: keyof Node;
       kind: 'hasMany' | 'belongsTo';
@@ -431,8 +455,8 @@ export default class Node extends Queryable {
     return map;
   }
 
-  public static get relatedTypes(): (keyof typeof NodeRegistry)[] {
-    const list: (keyof typeof NodeRegistry)[] = [];
+  public static get relatedTypes(): (keyof NodeRegistry)[] {
+    const list: (keyof NodeRegistry)[] = [];
     this.relationshipsByName.forEach((relationship) => {
       list.push(relationship.type);
     });
@@ -464,27 +488,16 @@ export default class Node extends Queryable {
     return map;
   }
 
-
-  public encapsulate = (data: TRelayNodeData): void => {
-    const { id, ...rest } = data;
-    if (this.id) {
-      Object.values(this._meta).forEach((field) => {
-        if (field.fieldType === 'attribute') {
-          this.localState.set(
-            field.propertyName as string,
-            data ? data[field.dataKey] : null,
-          );
-          this.store.internalStore.updatefieldState(this, field.propertyName, { loaded: true, initialValue: data[field.dataKey] });
-        };
-        // if (field.fieldType === 'relationship') {
-        //   assert(
-        //     `Incorrectly configured field '${field.propertyName} or server response: relations in schema must receive a __typename'`,
-        //     data[field.dataKey]['__typename'],
-        //   );
-        // };
-      });
+  protected get queryConfig(): { [modelName: keyof NodeRegistry]: RootQueryDescription } {
+    assert(`Cannot query a Node without id.`, (this as unknown as Node).id);
+    return {
+      [(this.constructor as unknown as typeof Node).modelName]: {
+        type: "node",
+        variables: {
+          id: (this as unknown as Node).id
+        }
+      }
     }
-
   }
 
 }

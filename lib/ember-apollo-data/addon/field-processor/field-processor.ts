@@ -1,5 +1,7 @@
 import type Owner from '@ember/owner';
 import { setOwner } from '@ember/application';
+import type { TirService } from 'ember-apollo-data/';
+import { configure } from 'ember-apollo-data/utils';
 
 /**
  * All transforms of EmberApolloDataModels must extend EmberApolloDataTransform, e.g.
@@ -32,20 +34,15 @@ import { setOwner } from '@ember/application';
  * Now Person has access to the apolloDataStore and session services.
  */
 export default class FieldProcessor {
-  /**
-   * Initializes the transform with owner
-   * @param { Owner } owner: owner for dependency injection, e.g.
-   * ```
-   * class MyTransoform extends EmberApolloDataTransform {}
-   *
-   * const transformer = new MyTransform(getOwner(this))
-   */
-  constructor(owner: Owner) {
-    setOwner(this, owner);
+
+  public declare store: TirService;
+  
+  constructor(store: TirService) {
+    configure(store, this);
   }
 
   /**
-   * Serializes the data to ApolloModel data type
+   * Serializes the data to Node field data type
    * Use this method when encapsulating response data
    * If not overwritten will return the data as is
    * @param { any } deserialized: non-serialized data received from server
@@ -59,8 +56,8 @@ export default class FieldProcessor {
    * Deserializes the encapsulated data to simple data
    * Use this method when decapsulating request data
    * If not overwritten will return the data as is
-   * @param { any } deserialized: non-serialized data received from server
-   * @returns { any }: serialized value
+   * @param {any} serialized : non-serialized data received from server
+   * @returns {any} : serialized value
    */
   deserialize = (serialized: any): any => {
     return serialized;

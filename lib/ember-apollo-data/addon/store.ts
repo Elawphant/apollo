@@ -1,3 +1,3 @@
-import Store from './services/ead-store';
+import Store from './services/tir';
 
 export default Store;

@@ -5,21 +5,21 @@ import { Queryable } from "./queryable";
 import type { NodeRegistry } from "./registry";
 import type { TRelayNodeData } from "./node";
 import { assert } from "@ember/debug";
-import type EADStoreService from "ember-apollo-data/services/ead-store";
+import type TirService from "ember-apollo-data/services/tir";
 import { getOwner, setOwner } from "@ember/owner";
 
 
 
 
 export class ToOne extends Queryable {
-  declare private modelName: keyof typeof NodeRegistry;
+  declare private modelName: keyof NodeRegistry;
   declare private parentNode: Node;
   declare private fieldNameOnParent: string
 
   public node: Node | null = null;
 
   constructor(
-    store: EADStoreService,
+    store: TirService,
     modelName: string,
     parentNode: Node,
     fieldNameOnParent: string,
@@ -27,7 +27,7 @@ export class ToOne extends Queryable {
     super();
     const owner = getOwner(store)!
     setOwner(this, owner);
-    this.store = owner.lookup(`service:${store.NAME}`) as EADStoreService;
+    this.store = owner.lookup(`service:${store.NAME}`) as TirService;
     this.modelName = modelName;
     this.parentNode = parentNode;
     this.fieldNameOnParent = fieldNameOnParent;

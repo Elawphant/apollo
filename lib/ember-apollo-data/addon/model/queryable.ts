@@ -1,27 +1,28 @@
-import { tracked } from 'tracked-built-ins';
 import { configureErrorHandler } from './error';
-import type EADStoreService from 'ember-apollo-data/services/ead-store';
-import type { AutoGraph } from 'ember-apollo-data/configurators/graph-author/author';
-import type { TRelayConnectionData } from './connection';
-import type { TRelayNodeData } from './node';
+import type TirService from 'ember-apollo-data/services/tir';
+import type { NodeRegistry } from './registry';
+import type { RootQueryDescription } from 'ember-apollo-data/-private/util';
+import type { TAliasedNodeData, TAliasedConnectionData } from './types';
+import { configure } from 'ember-apollo-data/utils';
 
 export class Queryable {
-  declare public store: EADStoreService;
-  declare public autoGraph: AutoGraph;
+  declare public store: TirService;
   _meta: any = {};
 
-  @tracked public queryInProgress: Promise<any> | undefined = undefined;
 
-  @tracked
-  private hasLoaded: boolean = false;
+  declare public readonly isNode: boolean;
+
+  public queryInProgress: Promise<any> | undefined = undefined;
+
+  private __hasLoaded: boolean = false;
 
   get loaded(){
-    return this.hasLoaded;
+    return this.__hasLoaded;
   }
 
   setLoadedOnce = () => {
-    if (!this.hasLoaded){
-      this.hasLoaded = true;
+    if (!this.__hasLoaded){
+      this.__hasLoaded = true;
     }
   }
 
@@ -65,7 +66,8 @@ export class Queryable {
     return this.queryInProgress ? true : false;
   }
 
-  constructor() {
+  constructor(store: TirService) {
+    configure(store, this);
     this.errors = configureErrorHandler(this._meta);
   }
 
@@ -90,28 +92,21 @@ export class Queryable {
     // }
   };
 
-  public encapsulate(data: TRelayNodeData | TRelayConnectionData): void {
-    throw new Error("This method should be implemented on Connection and Node")
+  public encapsulate(data: TAliasedNodeData | TAliasedConnectionData): void {
+    throw new Error("Queryable does not implement encapsulate, but one is expected on Node or Connection");
   };
 
+  protected get queryConfig(): { [modelName: keyof NodeRegistry]: RootQueryDescription } {
+    throw new Error(`Queryable does not implement queryConfig, but one is expected on Node or Connection`);
+  }
 
   public query = async (options?: any): Promise<void> => {
-    // ignore variables set on options, allowing autoGraph to configure
+    // ignore variables set on options, allowing QueryDesigner to configure
     if (options && options['variables']){
       delete options['variables'];
     }
-    try {
-      this.registerQueryInProgress(this.store.client.request(
-        this.autoGraph.configureOperaton(),
-        this.autoGraph.configureOperationVariables(), 
-        options,
-      ));
-      const data = await this.queryInProgress;
-      this.encapsulate(data);
-      this.setLoadedOnce();
-    } catch (e) {
-      // TODO handle errors 
-    }
+    // this.registerQueryInProgress(this.store.request());
+    this.setLoadedOnce();
   };
 
 }

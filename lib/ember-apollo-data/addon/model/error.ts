@@ -64,7 +64,7 @@ class ErrorHandler implements ErrorHandlerType {
   }
 }
 
-export function configureErrorHandler(meta: {
+function configureErrorHandler(meta: {
   [key: string]: AttrField | RelationshipField;
 }): ErrorHandlerType & { errors: Record<string, string[]> } {
   const ErrorHanlerInstance = new ErrorHandler(meta);
@@ -83,3 +83,5 @@ export function configureErrorHandler(meta: {
     errors: Record<string, string[]>;
   };
 }
+
+export { configureErrorHandler, type ErrorHandlerType };

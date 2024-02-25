@@ -1,10 +1,10 @@
 export const PaginationKeyArgs = [
+  '__typename',
+  'after',
+  'before',
   'first',
   'last',
-  'before',
-  'after',
   'offset',
-  'id',
 ];
 
 export const PageInfoFields = `

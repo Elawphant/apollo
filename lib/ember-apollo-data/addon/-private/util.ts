@@ -1,4 +1,5 @@
-import { NodeRegistry } from 'ember-apollo-data/model-registry';
+import { PageInfoArgs } from "ember-apollo-data/queries/pagination";
+import type { Variables } from "graphql-request";
 
 export type DecoratorPropertyDescriptor =
   | (PropertyDescriptor & { initializer?: any })
@@ -47,28 +48,22 @@ export function computedMacroWithOptionalParams(
       : fn(...(maybeDesc as [object, string, DecoratorPropertyDescriptor?]));
 }
 
-export function identifyConnection(obj: any) {
-  if (typeof obj !== 'object' || obj === null) {
-    // Non-object values (primitives, null, etc.)
-    return String(obj);
-  }
 
-  if (Array.isArray(obj)) {
-    // Handle arrays
-    const arrayRepresentation: string = obj
-      .sort()
-      .map((item) => identifyConnection(item))
-      .join(',');
-    return `[${arrayRepresentation}]`;
-  }
 
-  // Handle objects
-  const sortedKeys = Object.keys(obj).sort();
-  const objectRepresentation: string = sortedKeys
-    .map((key) => `${key}:${identifyConnection(obj[key])}`)
-    .join(',');
 
-  return `{${objectRepresentation}}`;
+export function identifyConnection(variables: Variables) {
+  const { first, last, before, after, offset, ...unsortableVariables } = variables;
+  
+  // sort paginfo
+  const obj = {
+    after: after,
+    before: before,
+    first: first,
+    last: last,
+    offset: offset,
+    ...unsortableVariables,
+  };
+  return String(obj);
 }
 
 /**

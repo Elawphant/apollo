@@ -1,4 +1,6 @@
+import type { NodeRegistry } from 'ember-apollo-data/model/registry';
 import type { GraphQLError } from 'graphql';
+import type { Variables } from 'graphql-request';
 
 export type RemoveIndex<T> = {
   [K in keyof T as string extends K
@@ -20,3 +22,9 @@ export interface GraphQLClientResponse<Data> {
   extensions?: unknown;
   errors?: GraphQLError[];
 }
+
+export type DataEntry = {
+  [key: string]: any;
+}
+
+export type ConnectionPK = string;

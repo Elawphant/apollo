@@ -1,5 +1,6 @@
 import Node from './node';
 import { FieldProcessor } from 'ember-apollo-data/field-processor';
+import type { NodeRegistry } from './registry';
 
 /**
  * @prop { keyof Node } propertyName: the property name on Node
@@ -34,13 +35,14 @@ export interface AttrField {
  */
 export interface RelationshipField {
   propertyName: string;
-  modelName: string;
+  modelName: keyof NodeRegistry;
   fieldType: 'relationship';
   relationshipType: 'hasMany' | 'belongsTo';
 
-  inverse: string;
+  inverse: RelationshipField["propertyName"] | null;
   fieldProcessorName: string | null;
   fieldProcessor?: FieldProcessor;
+  polymorphicTypes?: (keyof NodeRegistry)[];
 
   dataKey: string;
   isClientField?: boolean;

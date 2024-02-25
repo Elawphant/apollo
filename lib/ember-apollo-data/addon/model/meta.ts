@@ -1,15 +1,20 @@
+import type { ScalarTypeDefinitionNode, VariableDefinitionNode } from "graphql";
+
 /**
  *
  */
 export interface TypeConfig {
-  queryRootField: string;
-  createRootField: string;
-  updateRootField: string;
-  deleteRootField: string;
-  createInputTypeName: string;
-  updateInputTypeName: string;
-  deleteInputTypeName: string;
+  nodeQueryField?: string;
+  connectionQueryField?: string;
+  createMutationField: string;
+  updateMutationField: string;
+  deleteMutationField: string;
+  createInputTypeName: ScalarTypeDefinitionNode["name"]["value"];
+  updateInputTypeName: ScalarTypeDefinitionNode["name"]["value"];
+  deleteInputTypeName: ScalarTypeDefinitionNode["name"]["value"];
 
-  keyArgs?: Record<string, string>;
+  operationVariables?: {
+    [key: VariableDefinitionNode["variable"]["name"]["value"]]: ScalarTypeDefinitionNode["name"]["value"];
+  };
   inputFieldName?: string;
 }
