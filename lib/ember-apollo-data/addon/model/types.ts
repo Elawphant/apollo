@@ -83,15 +83,15 @@ type InternalConnectionData = {
 }
 
 
-type AggregatorRef = {
+type ConnectionRootRef = {
   modelName: keyof NodeRegistry;
   fieldName: RelationshipField["propertyName"];
-  parentNodeClientId?: Node["CLIENT_ID"];
+  clientId?: Node["CLIENT_ID"];
 }
 
 type ConnectionRef = {
   variables: Variables;  
-} & AggregatorRef
+} & ConnectionRootRef
 
 type GraphQlErrorData = {
   message: string,
@@ -111,7 +111,7 @@ export type {
   TRelayEdgeData,
   TAliasedConnectionData,
   TRelayPageInfoData,
-  AggregatorRef,
+  ConnectionRootRef,
   ConnectionRef,
   InternalConnectionData,
   GraphQlErrorData

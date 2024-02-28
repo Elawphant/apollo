@@ -10,9 +10,7 @@ import {
 const abortController = new AbortController();
 
 class TirClient extends GraphQLClient {
-  private declare abordtController: AbortController;
-
-  public declare errorPolicy: 'all' | 'ignore' | 'none';
+  private declare abortController: AbortController;
 
   public get headers(): Record<string, string> {
     return {}
@@ -28,11 +26,16 @@ class TirClient extends GraphQLClient {
       headers: () => this.headers,
       signal: abortController.signal
     });
-    this.abordtController = abortController;
+    this.abortController = abortController;
   }
 
-  abortRequests = () => {
-    return this.abordtController.abort();
+  abortRequests = (): void => {
+    this.abortController.abort();
+  }
+
+  // TODO: implement subscribe
+  subscribe = (...args: Parameters<GraphQLClient["request"]>) => {
+    throw new Error(`${ADDON_PREFIX}: Subscription is not currently supported.`)
   }
 }
 

@@ -1,21 +1,20 @@
 import { tracked } from 'tracked-built-ins';
-import { Connection, Node } from '.';
+import { Connection, Node } from '../model';
 import { assert } from '@ember/debug';
 import { getOwner, setOwner } from '@ember/owner';
-import type { NodeRegistry } from './registry';
-import { camelize, capitalize, dasherize } from '@ember/string';
+import type { NodeRegistry } from '../model/registry';
+import { dasherize } from '@ember/string';
 import type { RequestDocument, Variables } from 'graphql-request';
-import type { AggregatorRef, ConnectionRef, GraphQlErrorData, TAliasedConnectionData, TAliasedNodeData } from './types';
+import type { ConnectionRootRef, ConnectionRef, GraphQlErrorData, TAliasedConnectionData, TAliasedNodeData } from '../model/types';
 import type ApplicationInstance from '@ember/application/instance';
-import type { TirService } from 'ember-apollo-data/';
+import { TirService } from 'ember-apollo-data/';
 import { configureModelConstructor } from 'ember-apollo-data/configurators/node-type';
 import { ADDON_PREFIX } from 'ember-apollo-data/-private/globals';
 import { parse, type ParseOptions, visit, type OperationDefinitionNode, type FieldNode } from 'graphql';
-import { ConnectionRoot } from './connection-root';
-import type { FieldProcessor } from 'ember-apollo-data/field-processor';
-import { DefaultFieldProcessors } from 'ember-apollo-data/field-processors/default-field-processors';
-import type { AttrField, RelationshipField } from './field-mappings';
-import { getObjectAtPath } from './utils';
+import { ConnectionRoot } from '../model/connection-root';
+import type { AttrField, RelationshipField } from '../model/field-mappings';
+import { getObjectAtPath } from '../model/utils';
+import { TirCache } from './cache';
 
 
 function toOutput(output: Record<string, any>, enclose: boolean = true, enclosable: Record<string, any>) {
@@ -35,76 +34,57 @@ type PartialFieldStatusUpdate = {
   [K in keyof FieldStatus]?: FieldStatus[K];
 };
 
-export class TirStore {
-  declare private readonly STORE: TirService;
-
-  declare private readonly KNOWN_NODE_TYPES: Map<keyof NodeRegistry, typeof Node>;
-
-
-  /** A global default key to use if no key is specified. defaults to "id" */
-  declare private readonly DEFAULT_IDENTIFIER_FIELD: AttrField["dataKey"];
-
+export class InMemoryCache extends TirCache {
   /** Map of modelName to server side identifier field, e.g. user: username */
-  declare private readonly RECORD_TYPE_TO_IDF: Map<keyof NodeRegistry, AttrField["dataKey"]>;
+  declare protected readonly RECORD_TYPE_TO_IDF: Map<keyof NodeRegistry, AttrField["propertyName"]>;
 
   /** Main KEY table */
   @tracked
-  declare private readonly CLIENT_ID_TO_NODE: Map<Node["CLIENT_ID"], Node>;
+  declare protected readonly CLIENT_ID_TO_NODE: Map<Node["CLIENT_ID"], Node>;
   @tracked
-  declare private readonly IDENTIFIER_TO_CLIENT_ID: Map<`${keyof NodeRegistry}:${AttrField["propertyName"]}`, Node["CLIENT_ID"]>;
-
-  @tracked
-  declare private readonly TO_ONE_RELATIONS: Map<
-    `${Node["CLIENT_ID"]}:${RelationshipField["dataKey"]}`,
-    `${Node["CLIENT_ID"]}:${RelationshipField["dataKey"]}` | null
+  declare protected readonly IDENTIFIER_TO_CLIENT_ID: Map<
+    `${keyof NodeRegistry}:${AttrField["propertyName"]}:${(typeof Node.Meta)[string]["dataKey"]}`,
+    Node["CLIENT_ID"]
   >;
 
   @tracked
-  declare private readonly TO_MANY_RELATIONS: Map<Node["CLIENT_ID"], Node["CLIENT_ID"][]>;
-
-  /**
-   * A map of ConnectionRoots
-   * The key is in form of `<fieldName>:<modelName>:<CLIENT_ID|null>`: null if it is a root field.
-   */
-  @tracked
-  declare private readonly CONNECTIONS_AGGREAGORS: Map<string, ConnectionRoot>;
+  declare protected readonly TO_ONE_RELATIONS: Map<
+    `${Node["CLIENT_ID"]}:${RelationshipField["propertyName"]}`,
+    `${Node["CLIENT_ID"]}:${RelationshipField["propertyName"]}` | null
+  >;
 
   @tracked
-  declare private readonly FIELD_STATE: Map<Node["CLIENT_ID"], { [fieldName: string]: FieldStatus }>;
-  @tracked
-  declare private readonly FIELD_ERRORS: Map<Node["CLIENT_ID"], { [fieldName: string]: string[] }>;
+  declare protected readonly LISTS: Map<
+    `${keyof NodeRegistry}:${(typeof Node.Meta)[string]["propertyName"]}:${Node["CLIENT_ID"]}` | `${string}:${keyof NodeRegistry}`,
+    Set<Node["CLIENT_ID"]>
+  >;
 
+  @tracked // string in map key is the root field name of the GraphQL query
+  declare protected readonly ROOTS: Map<
+    `${keyof NodeRegistry}:${(typeof Node.Meta)[string]["propertyName"]}:${Node["CLIENT_ID"]}` | `${string}:${keyof NodeRegistry}`,
+    ConnectionRoot
+  >;
+
+  @tracked
+  declare protected readonly FIELD_STATE: Map<Node["CLIENT_ID"], { [fieldName: AttrField["propertyName"]]: FieldStatus }>;
+  @tracked
+  declare protected readonly FIELD_ERRORS: Map<Node["CLIENT_ID"], { [fieldName: AttrField["propertyName"]]: string[] }>;
+
+  @tracked
+  declare protected readonly REMOVED_NODES: Set<Node["CLIENT_ID"]>;
 
   constructor(store: TirService, defaultIdentifierField?: string) {
-    setOwner(this, getOwner(store)!);
-    this.STORE = getOwner(this)?.lookup(`service:${dasherize(store.constructor.name)}`) as TirService;
-    this.KNOWN_NODE_TYPES = new Map();
-    this.DEFAULT_IDENTIFIER_FIELD = defaultIdentifierField ?? "id";
+    super(store, defaultIdentifierField);
     this.RECORD_TYPE_TO_IDF = new Map();
     this.CLIENT_ID_TO_NODE = new Map();
     this.IDENTIFIER_TO_CLIENT_ID = new Map();
     this.TO_ONE_RELATIONS = new Map();
-    this.TO_MANY_RELATIONS = new Map();
+    this.LISTS = new Map();
+    this.ROOTS = new Map();
     this.FIELD_STATE = new Map();
-    this.CONNECTIONS_AGGREAGORS = new Map();
+    this.REMOVED_NODES = new Set();
   };
 
-
-  public modelFor = (modelName: string): typeof Node => {
-    if (!this.KNOWN_NODE_TYPES.get(modelName)) {
-      const RawModelConstructor = (
-        getOwner(this) as ApplicationInstance
-      ).resolveRegistration(`node:${modelName}`) as typeof Node | undefined;
-      assert(
-        `${ADDON_PREFIX}: No model extending Node found for ${modelName}`,
-        RawModelConstructor && typeof RawModelConstructor === typeof Node,
-      );
-      const shimInstance = new RawModelConstructor(this.STORE);
-      const constructor = configureModelConstructor(shimInstance, modelName);
-      this.KNOWN_NODE_TYPES.set(modelName, constructor);
-    }
-    return this.KNOWN_NODE_TYPES.get(modelName)!;
-  };
 
   private parseAlias = (alias: string): {
     typeName: keyof NodeRegistry | undefined,
@@ -132,55 +112,39 @@ export class TirStore {
   }
 
 
-  public getIDF = (modelName: keyof NodeRegistry): `${keyof NodeRegistry}:${keyof Node & string}` => {
-    const pk = this.RECORD_TYPE_TO_IDF.get(modelName);
-    return `${modelName}:${pk ?? this.DEFAULT_IDENTIFIER_FIELD}`;
+  // TODO imporve IDF logic
+  public getIDInfo = (modelName: keyof NodeRegistry): {
+    dataKey: (typeof Node.Meta)[string]["dataKey"];
+    propertyName: (typeof Node.Meta)[string]["propertyName"];
+    dbKeyPrefix: `${keyof NodeRegistry}:${(typeof Node.Meta)[string]["propertyName"]}`;
+  } => {
+    const pkField = this.RECORD_TYPE_TO_IDF.get(modelName) ?? this.DEFAULT_IDENTIFIER_FIELD;
+    const NodeType = this.modelFor(modelName);
+    return {
+      dataKey: NodeType.Meta[pkField]?.dataKey ?? NodeType.Meta[pkField]!.propertyName,
+      propertyName: NodeType.Meta[pkField]!.propertyName,
+      dbKeyPrefix: `${modelName}:${NodeType.Meta[pkField]!.propertyName}`
+    };
   };
 
-
-  private initializeNode = (modelName: keyof NodeRegistry) => {
-    const NodeType = this.modelFor(modelName)!
-    const node = new NodeType(this.STORE);
-    this.CLIENT_ID_TO_NODE.set(node.CLIENT_ID, node);
-    const Meta = NodeType.Meta;
-    Object.keys(Meta).forEach((fieldName) => {
-      const propertyName: string = Meta[fieldName]!.propertyName;
-      const fieldProcessorName = Meta[fieldName]!.fieldProcessorName;
-      if (fieldProcessorName) {
-        // Lookup for defined field processor in field processors
-        let Processor = getOwner(this)!.lookup(
-          `field-processor:${fieldProcessorName}`,
-        ) as typeof FieldProcessor | undefined;
-        // Try looking up in default field processors
-        if (!Processor) {
-          Processor =
-            DefaultFieldProcessors[fieldProcessorName];
-        }
-        assert(
-          `No field processor with name "${Meta[fieldName]!.fieldProcessorName}" was found.`,
-          Processor,
-        );
-        if (Processor) {
-          // initialize a field processor and set it on _meta
-          // TODO: change process initialization to accept store instead of owner
-          (node._meta[fieldName] as AttrField).fieldProcessor = new Processor(
-            this.STORE,
-          )!;
-        }
-      }
-      Object.defineProperty(node, propertyName, {
-        get: Meta[propertyName]!.getter,
-        set: Meta[propertyName]!.setter,
-        enumerable: true,
-        configurable: true,
-      });
-    });
-
-    return this.getNodeByClientId(node.CLIENT_ID);
+  /**
+   * Returns the key for LISTS and ROOTS maps 
+   * @param fieldName 
+   * @param modelName 
+   * @param clientId 
+   * @returns 
+   */
+  public getListId = (
+    fieldName: string | RelationshipField["propertyName"],
+    modelName: keyof NodeRegistry,
+    clientId?: Node["CLIENT_ID"]
+  ): `${string}:${keyof NodeRegistry}` => {
+    return clientId ? `${modelName}:${fieldName}:${clientId}` : `${fieldName}:${modelName}`;
   }
 
   public createNode = (modelName: keyof NodeRegistry) => {
-    const node = this.initializeNode(modelName)!;
+    const NodeType = this.modelFor(modelName);
+    const node = new NodeType(this.store);
     const data: TAliasedNodeData = {};
     const meta = (node.constructor as typeof Node).Meta;
     Object.values(meta).forEach(field => {
@@ -195,10 +159,10 @@ export class TirStore {
   }
 
   public addNode = (modelName: keyof NodeRegistry, data: TAliasedNodeData): Node => {
-    const IDF = this.getIDF(modelName);
-    assert(`${ADDON_PREFIX}: Node data must contain the identifier field "${IDF}"`, data[IDF]);
+    const { propertyName, dataKey, dbKeyPrefix } = this.getIDInfo(modelName);
+    assert(`${ADDON_PREFIX}: Node data must contain the identifier field "${dataKey}"`, data[dataKey] !== undefined);
     const NodeType = this.modelFor(modelName);
-    const newNode = new NodeType(this.STORE);
+    const newNode = new NodeType(this.store);
     this.CLIENT_ID_TO_NODE.set(newNode.CLIENT_ID, newNode);
     this.initializeFields(newNode);
     this.identifyNode(newNode);
@@ -206,24 +170,26 @@ export class TirStore {
   };
 
 
-  public updateNode = (modelName: keyof NodeRegistry, data: TAliasedNodeData) => {
-    const IDF = this.getIDF(modelName);
-    const NODE = this.getNode(modelName, IDF);
-    if (!NODE) {
-      throw new Error(`No such node with ${IDF}:${data[IDF]}.`);
+  private updateNode = (modelName: keyof NodeRegistry, data: TAliasedNodeData) => {
+    const { propertyName, dataKey, dbKeyPrefix } = this.getIDInfo(modelName);
+    const node = this.getNode(modelName, propertyName);
+    // this should never happen
+    if (!node) {
+      throw new Error(`No such node of type ${modelName} with identifier field ${propertyName}:${data[dataKey]}.`);
     };
-    const NodeType = NODE.constructor as typeof Node;
+    const NodeType = this.modelFor(modelName);
     const meta = NodeType.Meta;
-    const fields = Object.values(NodeType.Meta).map(meta => meta.dataKey);
-    Object.entries(data).forEach(([key, val]) => {
-      if (fields.includes(key)) {
-        Object.values(meta).forEach(metaField => {
-          if (metaField.fieldType === "attribute") {
-            // use setters on the node instance to update values.
-            NODE[key] = val;
-          }
-        });
+    Object.values(NodeType.Meta).forEach(metaField => {
+      if (metaField.fieldType === "attribute") {
+        if (data[metaField.dataKey] !== undefined) {
+          this.updatefieldState(node, metaField.propertyName, {
+            loaded: true,
+            initialValue: data[dataKey],
+            currentValue: data[dataKey],
+          });
+        }
       };
+      // leave relations to be updated in the serialized
     });
   }
 
@@ -231,34 +197,34 @@ export class TirStore {
   public removeNode = (node: Node): void => {
     // TODO: REMOVE FROM ALL MAPS
     const NodeType = (node.constructor as typeof Node)
-    const IDF = this.getIDF(NodeType.modelName);
+    const { propertyName, dataKey, dbKeyPrefix } = this.getIDInfo(NodeType.modelName);
 
-
-    this.TO_ONE_RELATIONS.forEach((relation, key) => {
-      if (relation === node.CLIENT_ID) {
-        this.TO_ONE_RELATIONS.set(key, null);
-      };
-    })
+    this.updateToOneRelations(node, propertyName, null);
     this.CLIENT_ID_TO_NODE.delete(node.CLIENT_ID);
-    this.IDENTIFIER_TO_CLIENT_ID.delete(IDF);
+    this.IDENTIFIER_TO_CLIENT_ID.delete(`${dbKeyPrefix}:${node[propertyName]}`);
   };
 
   /** Associates the Node instance with server side identifier field */
   public identifyNode = (node: Node) => {
-    const IDF = this.getIDF(dasherize(node.constructor.name));
-    if (node[IDF]) {
-      this.IDENTIFIER_TO_CLIENT_ID.set(node[IDF], node.CLIENT_ID);
+    const { propertyName, dataKey, dbKeyPrefix } = this.getIDInfo((node.constructor as typeof Node).modelName);
+    if (node[dataKey]) {
+      this.IDENTIFIER_TO_CLIENT_ID.set(`${dbKeyPrefix}:${node[propertyName]}`, node.CLIENT_ID);
     }
   };
 
-  public getNode = (modelName: keyof NodeRegistry, identifier: keyof Node & string): Node | undefined => {
-    const clientId = this.IDENTIFIER_TO_CLIENT_ID.get(`${modelName}:${identifier}`);
+  public getNode = (
+    modelName: keyof NodeRegistry,
+    identifier: Node[(typeof Node.Meta)[string]["propertyName"]] | TAliasedNodeData[(typeof Node.Meta)[string]["dataKey"]]
+  ): Node | undefined => {
+    const { propertyName, dataKey, dbKeyPrefix } = this.getIDInfo(modelName);
+
+    const clientId = this.IDENTIFIER_TO_CLIENT_ID.get(`${dbKeyPrefix}:${identifier}`);
     return clientId ? this.getNodeByClientId(clientId) : undefined;
   };
 
   private getCreatedOrUpdatedNode = (modelName: keyof NodeRegistry, data: TAliasedNodeData): Node => {
-    const IDF = this.getIDF(modelName);
-    let NODE = this.getNode(modelName, IDF);
+    const { propertyName, dataKey, dbKeyPrefix } = this.getIDInfo(modelName);
+    let NODE = this.getNode(modelName, data[dataKey]);
     if (!NODE) {
       NODE = this.addNode(modelName, data);
     };
@@ -273,49 +239,43 @@ export class TirStore {
       : undefined;
   };
 
-  public getOrCreateAggregator = (ref: AggregatorRef) => {
-    const { fieldName, modelName, parentNodeClientId } = ref;
-    const id = `${fieldName}${modelName}${parentNodeClientId ?? "null"}`;
-    let aggregator = this.CONNECTIONS_AGGREAGORS.get(id);
-    if (!aggregator) {
-      this.CONNECTIONS_AGGREAGORS.set(id, new ConnectionRoot(this.STORE, ref));
+  /** Always returns a ConnectonRoot instance */
+  public getConnectionRoot = (ref: ConnectionRootRef) => {
+    const { fieldName, modelName, clientId } = ref;
+    const key = this.getListId(modelName, fieldName, clientId);
+    let connectionRoot = this.ROOTS.get(key);
+    if (!connectionRoot) {
+        this.ROOTS.set(key as any, new ConnectionRoot(this.store, ref))
     };
-    return this.CONNECTIONS_AGGREAGORS.get(id)!;
-  }
+    return this.ROOTS.get(key)!;
+  };
 
   /** 
    * Creates of overwrites the internal connection with the data recieved from the server 
    * */
   public getCreatedOrUpdatedConnection = (ref: ConnectionRef, data: TAliasedConnectionData) => {
-    const aggregator = this.getOrCreateAggregator(ref);
-    const { modelName } = ref;
-    const { edges } = data;
-    edges?.forEach(edge => {
-      const { node, ...rest } = edge;
-      if (node) {
-        // create or update the relevant nodes
-        this.getCreatedOrUpdatedNode(modelName, node);
-      }
-    });
-    // create or updat ethe connection data
-    aggregator.createOrUpdateConnection(ref, data);
-    return aggregator.getConnection(ref)!;
+    const connectionRoot = this.getConnectionRoot(ref);
+    // create or update the connection data
+    // do not create or update nodes, becuase it is the job of the serializer
+    // TODO: Reimplement: // connectionRoot.createOrUpdateConnection(ref, data);
+    return connectionRoot.getConnection(ref)!;
   };
 
 
   public getConnection = (ref: ConnectionRef) => {
-    const aggregator = this.getOrCreateAggregator(ref);
-    return aggregator.getConnection(ref.variables);
+    const connectionRoot = this.getConnectionRoot(ref);
+    return connectionRoot.getConnection(ref.variables);
   };
 
 
   public parseGraphQlDocument = (source: RequestDocument, options?: ParseOptions | undefined) => {
     const AST = typeof source === "object" ? source : parse(source);
-    const connections: Map<string, {
+    const aliasMap: Map<string, {
       fieldName: string,
-      variables: Variables
+      variables: Variables,
+      isNode?: boolean
     }> = new Map();
-    const connectionAliasRegex = /^[A-Z][a-zA-Z]*Connection.*/;
+    const AliasRegex = /^[A-Z][A-Za-z]*Node.*$|^[A-Z][A-Za-z]*Connection.*$/;
 
     visit(AST, {
       // Only process operation definitions (queries, mutations, subscriptions)
@@ -326,11 +286,13 @@ export class TirStore {
             if (selection.kind === 'Field') {
               const field: FieldNode = selection;
 
-              // Check if the field has an alias and if it matches the connection naming convention
-              if (field.alias && connectionAliasRegex.test(field.alias.value)) {
+              // Check if the field has an alias and if it matches the naming convention
+              // todo implement node/connetion type assignemnt too
+              if (field.alias && AliasRegex.test(field.alias.value)) {
                 const alias = field.alias.value;
                 const variables: Variables = {};
 
+                // TODO: understand this
                 // Collect arguments (variables) of the connection field
                 field.arguments?.forEach((arg) => {
                   if (arg.value.kind === 'IntValue' || arg.value.kind === 'StringValue') {
@@ -339,11 +301,11 @@ export class TirStore {
                   }
                 });
 
-                if (connections.has(alias)) {
-                  throw new Error(`${ADDON_PREFIX}: Duplicate connection identifier ${alias}`);
+                if (aliasMap.has(alias)) {
+                  throw new Error(`${ADDON_PREFIX}: Duplicate identifier ${alias}`);
                 };
                 // Add the connection and its variables to the map
-                connections.set(alias, {
+                aliasMap.set(alias, {
                   fieldName: field.name.value,
                   variables: variables
                 });
@@ -353,7 +315,7 @@ export class TirStore {
         },
       },
     });
-    return connections;
+    return aliasMap;
   }
 
 
@@ -362,7 +324,6 @@ export class TirStore {
     data: Record<string, unknown>,
     parentNode?: Node,
     fieldNameOnParent?: RelationshipField["propertyName"],
-    skipNodeEncapsulationOnConnections: boolean = false,
     encloseInOutput: boolean = true,
     // TODO: improve output type
   ): Record<string, Node | Connection | Record<string, any>> => {
@@ -377,13 +338,13 @@ export class TirStore {
       };
       if (typeName && type) {
         const modelName = dasherize(typeName);
-        const NodeType = this.modelFor(modelName); 
+        const NodeType = this.modelFor(modelName);
         if (type === "Connection") {
           const ref: ConnectionRef = {
             modelName: modelName,
             variables: variables.variables,
             fieldName: variables.fieldName,
-            parentNodeClientId: parentNode?.CLIENT_ID,
+            clientId: parentNode?.CLIENT_ID,
           };
           const CONNECTION = this.getCreatedOrUpdatedConnection(ref, value as TAliasedConnectionData);
           // TODO: handle to-many relation registration
@@ -391,51 +352,63 @@ export class TirStore {
           edges?.forEach(edge => {
             const node = edge.node;
             if (node) {
-              const IDF = this.getIDF(modelName);
-              this.serialize(aliases, node, parentNode, variables.fieldName, !skipNodeEncapsulationOnConnections, false);
+              this.serialize(aliases, node, parentNode, variables.fieldName, false);
             }
           });
           // overwrite the data with encapsulated value
           toOutput(output, encloseInOutput, {
             [key]: CONNECTION
-          })
+          });
         };
         if (type === "Node") {
           const nodeData = value as TAliasedNodeData
-          if (!skipNodeEncapsulationOnConnections) {
-            // for performance improvement skip node encapuslation, because it was already done inside getCreatedOrUpdatedConnection
-            const currentNode = this.getCreatedOrUpdatedNode(modelName, nodeData);
-            Object.values(NodeType.Meta).forEach(field => {
-              if (field.fieldType === "relationship"){
-                if (field.relationshipType === "belongsTo"){
+          // for performance improvement skip node encapuslation, because it was already done inside getCreatedOrUpdatedConnection
+          const currentNode = this.getCreatedOrUpdatedNode(modelName, nodeData);
+          Object.values(NodeType.Meta).forEach(field => {
+            if (field.fieldType === "relationship") {
+              if (field.relationshipType === "belongsTo") {
+                // if to-one relation is null
+                if (nodeData[field.dataKey] === null) {
                   this.updateToOneRelations(currentNode, field.propertyName, null)
-
-                  // TODO CONTINUE FROM HERE <---------- 
-                }
-              }
-            })
-          }
-          const IDF = this.getIDF(modelName);
-          // potentially, this should never happen
-          if (!this.IDENTIFIER_TO_CLIENT_ID.get(nodeData[IDF])) {
-            throw new Error(`${ADDON_PREFIX}: No "CLIENT_ID" found for ${capitalize(camelize(modelName))} with ${IDF} = ${nodeData[IDF]}`);
-          };
-          const currentNode = this.getNodeByClientId(this.IDENTIFIER_TO_CLIENT_ID.get(nodeData[IDF])!)!;
-          this.serialize(aliases, nodeData, currentNode, variables.fieldName, false, false);
-          toOutput(output, encloseInOutput, {
-            [key]: this.getNode(modelName, nodeData[IDF]),
+                };
+                // else -> leave for childNode to perform relation updating. see below
+              };
+            };
           });
-        }
+          const { propertyName, dataKey, dbKeyPrefix } = this.getIDInfo(modelName);
+          // potentially, this should never happen
+          if (!this.IDENTIFIER_TO_CLIENT_ID.get(`${dbKeyPrefix}:${nodeData[dataKey]}`)) {
+            throw new Error(`${ADDON_PREFIX}: No "CLIENT_ID" found for ${modelName} with ${propertyName} = ${nodeData[dataKey]}`);
+          };
+          // update to-one relations restrospectively and bi-directionally
+          if (parentNode && fieldNameOnParent) {
+            const childField = NodeType.Meta[fieldNameOnParent];
+            if (childField && childField.fieldType === "relationship") {
+              if (childField.relationshipType === "belongsTo") {
+                this.updateToOneRelations(parentNode, childField.propertyName, currentNode);
+              };
+            };
+          };
+          this.serialize(aliases, nodeData, currentNode, variables.fieldName, false);
+          toOutput(output, encloseInOutput, {
+            [key]: this.getNode(modelName, nodeData[dataKey]),
+          });
+        };
       } else {
         toOutput(output, true, {
           [key]: value,
         });
       };
     });
+    // TODO: iterate over Nodes, check if any is marked as deleted, check if there is no error with that node, call removeNode on it.
     return output;
   };
 
 
+  /** 
+   * Bi-directionally updates one-to-one relations.
+   * If `skipInverses` is `true`, updates one-to-one relation unidirectionally (used for many-to-one updates)
+   * */
   private updateToOneRelations = (
     parentNode: Node,
     fieldName: RelationshipField['propertyName'],
@@ -482,14 +455,24 @@ export class TirStore {
     }
     // register current relation
     this.TO_ONE_RELATIONS.set(key, newInverseKey);
-  }
+  };
+
+
+  public getList = (modelName: keyof NodeRegistry, fieldName: RelationshipField['propertyName'], clientId: Node["CLIENT_ID"]) => {
+    const key = this.getListId(modelName, fieldName, clientId);
+    let list = this.LISTS.get(key);
+    if (!list) {
+      this.LISTS.set(key, new Set());
+    };
+    return this.LISTS.get(key)!;
+  };
 
   /** Creates/updates to-one backward relations on many-to-one relations */
-  private updateOneToManyRelations = (
+  public updateList = (
     parentNode: Node,
     fieldName: RelationshipField["propertyName"],
     childNodes: Node[]
-  ) => {
+  ): void => {
     const ParentType = parentNode.constructor as typeof Node;
     const field = ParentType.Meta[fieldName] as RelationshipField;
     if (field.inverse) {
@@ -499,6 +482,13 @@ export class TirStore {
         if (inverseField && inverseField.fieldType === "relationship") {
           if (inverseField.relationshipType === "belongsTo") {
             this.updateToOneRelations(node, inverseField.propertyName, parentNode, true);
+          };
+          if (inverseField.relationshipType === "hasMany") {
+            const newNodes = new Set(childNodes.map(node => node.CLIENT_ID));
+            const key = this.getListId(ParentType.modelName, fieldName, parentNode.CLIENT_ID);
+            let oldNodes = this.getList(ParentType.modelName, fieldName, parentNode.CLIENT_ID);
+            const validList = Array.from(oldNodes).filter(clientId => this.CLIENT_ID_TO_NODE.has(clientId));
+            this.LISTS.set(key, new Set(...validList, ...newNodes));
           };
         };
       });
@@ -514,11 +504,11 @@ export class TirStore {
         if (key && record && fieldErrorField) {
           const { typeName, type } = this.parseAlias(key) ?? {};
           if (typeName && type) {
-            const IDF = this.getIDF(typeName);
-            if (record[IDF]) {
-              const node = this.getNode(typeName, IDF);
+            const { propertyName, dataKey, dbKeyPrefix } = this.getIDInfo(typeName);
+            if (record[dataKey]) {
+              const node = this.getNode(typeName, record[dataKey]);
               if (node) {
-                this.addFieldError(node, fieldErrorField, error.message);
+                this.addFieldError(node, fieldErrorField, message);
               };
             };
           };
@@ -534,6 +524,7 @@ export class TirStore {
     return `${clientId}:${toOneFieldName}`;
   }
 
+  // TODO: redo
   private setToOne = (
     parentNodeClientId: Node["CLIENT_ID"], fieldNameOnParent: RelationshipField["propertyName"], childNode: Node | null
   ) => {
@@ -561,8 +552,8 @@ export class TirStore {
     return null;
   }
 
-  public updatefieldState = (node: Node, fieldName: typeof Node.Meta[string]["dataKey"], status: PartialFieldStatusUpdate) => {
-    const field = this.stateForField(node, fieldName);
+  public updatefieldState = (node: Node, fieldName: typeof Node.Meta[string]["propertyName"], status: PartialFieldStatusUpdate) => {
+    const field = this.stateForField(node.CLIENT_ID, fieldName);
     Object.assign(field, status);
   };
 
@@ -586,8 +577,8 @@ export class TirStore {
     this.FIELD_STATE.set(node.CLIENT_ID, newState);
   }
 
-  public stateForField = (node: Node, fieldName: typeof Node.Meta[string]["dataKey"]): FieldStatus => {
-    return this.FIELD_STATE.get(node.CLIENT_ID)![fieldName]!;
+  public stateForField = (clientId: Node["CLIENT_ID"], fieldName: typeof Node.Meta[string]["propertyName"]): FieldStatus => {
+    return this.FIELD_STATE.get(clientId)![fieldName]!;
   };
 
   /**
@@ -598,7 +589,16 @@ export class TirStore {
     return state ? Object.values(state).some(status => {
       status.loaded === false
     }) : true;
-  }
+  };
+
+  public revert = (clientId: Node["CLIENT_ID"]) => {
+    const state = this.FIELD_STATE.get(clientId);
+    if (state) {
+      Object.values(state).forEach(field => {
+        field.currentValue = field.initialValue;
+      });
+    };
+  };
 
   /** Adds a single error message to the errors */
   public addFieldError = (node: Node, fieldErrorField: typeof Node.Meta[string]["dataKey"], errorMessage: GraphQlErrorData["message"]) => {
@@ -613,5 +613,19 @@ export class TirStore {
       Object.values(errorsState).forEach(field => field.splice(0, field.length));
     };
   };
+
+
+  public getRemovedNodes = (): Set<Node["CLIENT_ID"]> => {
+    return this.REMOVED_NODES;
+  };
+
+  public markNodeForRemoval = (clientId: Node["CLIENT_ID"]): void => {
+    this.REMOVED_NODES.add(clientId);
+  };
+
+  public unmarkNodeForRemoval = (clientId: Node["CLIENT_ID"]): void => {
+    this.REMOVED_NODES.delete(clientId);
+  };
+
 
 }

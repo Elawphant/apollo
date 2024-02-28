@@ -71,7 +71,7 @@ function attr(
           if (fieldProcessor) {
             return fieldProcessor.deserialize(data);
           }
-          const fieldState = modelInstance.store.internalStore.stateForField(modelInstance.CLIENT_ID, propertyName as string);
+          const fieldState = modelInstance.store.getStateForNodeAttr(modelInstance.CLIENT_ID, propertyName as string);
           if (fieldState.loaded && modelInstance.loaded) {
             return data;
           };
