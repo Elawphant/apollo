@@ -1,3 +1,3 @@
-import type Node from './node';
+import type { Pod } from './pod';
 
-export type NodeRegistry = Record<string, typeof Node>;
+export type PodRegistry = Record<string, typeof Pod>;

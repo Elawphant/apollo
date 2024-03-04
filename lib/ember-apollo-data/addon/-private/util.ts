@@ -1,15 +1,24 @@
-import { PageInfoArgs } from "ember-apollo-data/queries/pagination";
+import type { TirService } from "ember-apollo-data/";
+import type { Pod } from "ember-apollo-data/model";
 import type { Variables } from "graphql-request";
 
 export type DecoratorPropertyDescriptor =
   | (PropertyDescriptor & { initializer?: any })
   | undefined;
+
 export type ElementDescriptor = [
   target: object,
   propertyName: string,
   descriptor?: DecoratorPropertyDescriptor,
 ];
 
+export type PodDescriptor = [
+  target: { store: TirService } & typeof Pod["prototype"],
+  propertyName: string,
+  descriptor?: DecoratorPropertyDescriptor,
+];
+
+// TODO: consider removing
 // https://github.com/emberjs/ember.js/blob/70bcd9facdaf37ba19f60e6a10a511a34724f0f4/packages/%40ember/-internals/metal/lib/decorator.ts#L20-L41
 export function isElementDescriptor(args: any) {
   const [maybeTarget, maybeKey, maybeDesc] = args;
@@ -30,30 +39,11 @@ export function isElementDescriptor(args: any) {
       // TS compatibility
       maybeDesc === undefined)
   );
-}
-
-type DataDecorator = (
-  target: object,
-  key: string,
-  desc?: DecoratorPropertyDescriptor,
-) => DecoratorPropertyDescriptor;
-type DataDecoratorFactory = (...args: unknown[]) => DataDecorator;
-
-export function computedMacroWithOptionalParams(
-  fn: DataDecorator | DataDecoratorFactory,
-) {
-  return (...maybeDesc: unknown[]) =>
-    isElementDescriptor(maybeDesc)
-      ? (fn as DataDecoratorFactory)()(...(maybeDesc as ElementDescriptor))
-      : fn(...(maybeDesc as [object, string, DecoratorPropertyDescriptor?]));
-}
-
-
-
+};
 
 export function identifyConnection(variables: Variables) {
   const { first, last, before, after, offset, ...unsortableVariables } = variables;
-  
+
   // sort paginfo
   const obj = {
     after: after,
@@ -64,23 +54,4 @@ export function identifyConnection(variables: Variables) {
     ...unsortableVariables,
   };
   return String(obj);
-}
-
-/**
- * ```
- * {
- *  type: "node" | "connection";
- *  fields?: QueryFieldDeclaration[];
- *  variables?: Object;
- * }
- * ```
- */
-export interface RootQueryDescription {
-  type: 'node' | 'connection';
-  fields?: QueryFieldDeclaration[];
-  variables?: Record<string, any>;
-}
-
-export type QueryFieldDeclaration =
-  | string
-  | Record<string, QueryFieldDeclaration[]>;
+};

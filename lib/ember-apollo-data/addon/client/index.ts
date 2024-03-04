@@ -1,3 +1,3 @@
-import Client from './tir-client';
+import { TirClient } from './tir-client';
 
-export default Client;
+export default TirClient;

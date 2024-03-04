@@ -1,184 +1,175 @@
-import type { Node } from ".";
+import type { Pod } from ".";
 import { Queryable } from "./queryable";
-import type { ConnectionRoot } from "./connection-root";
+import type { ConnectionRoot } from "../caches/connection-root";
 import type { Variables } from "graphql-request";
 import type { TirService } from "ember-apollo-data/";
-import type { ConnectionRef } from "./types";
+import type { ConnectionRef, ClientId, TStemData, TRelayEdgeData } from "./types";
 
 
 
-export class Connection extends Queryable implements Array<Node> {
-  private declare readonly aggregator: ConnectionRoot;
-  private declare readonly fieldName: string;
+export class Connection extends Queryable implements Array<Pod> {
+  private declare readonly root: ConnectionRoot;
   private declare readonly variables: Variables;
-  private declare readonly parentNodeClientId?: Node["CLIENT_ID"];
+  private declare readonly parentClientId?: ClientId;
+
+  private declare connection: TStemData;
+
+  private declare __pods: Set<ClientId>;
 
   public get identifier() {
-    return this.aggregator.identifyConnection(this.variables);
+    return this.root.identifyConnection(this.variables);
   };
 
   constructor(
     store: TirService,
-    ref: ConnectionRef,
+    root: ConnectionRoot,
+    variables: Variables,
+    data: TStemData
   ) {
     super(store);
-    const { modelName, fieldName, variables, parentNodeClientId } = ref;
-    const pageInfo = {};
-    const variableKeys = Object.keys(variables);
+    this.root = root;
+    this.variables = variables;
+    this.connection = data;
+  };
 
-    this.aggregator = this.store.getConnectionRoot({
-      modelName: modelName,
-      fieldName: fieldName,
-      parentNodeClientId: parentNodeClientId
-    });
-    this.fieldName = ref.fieldName;
-    this.variables = ref.variables;
-    this.parentNodeClientId = ref.parentNodeClientId;
-  }
-
-  // TODO: test
-  public get nodesFromAllConnections() {
-    return this.aggregator.records;
-  }
-
-  private get currentState() {
-    return this.aggregator.getNodes(this.variables);
-  }
+  public get pods() {
+    return [...this.__pods].map(clientId => this.store.getPodByClientId(clientId)).filter(Pod => Pod !== undefined) as Pod[];
+  };
 
   public get length(): number {
-    return this.currentState.length;
+    return this.pods.length;
+  };
+
+  public get meta() {
+    return {
+      ...this.connection,
+      edges: this.connection.edges?.map(edge => {
+        return {
+          ...edge,
+          node: edge.node
+            ? this.store.getPod(this.root.modelName, edge.node[this.store.getIDInfo(this.root.modelName).dataKey])
+            : undefined
+        };
+      })
+    }
   }
 
 
-  add(node: Node): void {
-    this.aggregator.add(node);
+  add(pod: Pod): void {
+    this.root.add(pod);
   };
 
-  remove(node: Node): void {
-    this.aggregator.removeNode(node);
+  remove(pod: Pod): void {
+    this.root.remove(pod);
   };
 
-  /** Reverts unsaved changes by clearing added and removed nodes on the aggregator */
+  /** Reverts unsaved changes by clearing added and removed pods on the root */
   revert(): void {
-    this.aggregator.revert();
+    this.root.revert();
   };
 
   get added() {
-    return this.aggregator.addedNodes;
+    return this.root.added;
   }
 
   get removed() {
-    return this.aggregator.removedNodes;
+    return this.root.removed;
   }
 
-  get meta() {
-    const { connectionData, edges } = this.aggregator.getConnectionData(this.variables) ?? {};
-    const edgesData = edges ?? [];
-    return {
-      ...connectionData,
-      edges: Array.from(edgesData).map(([clienId, edge]) => {
-        return {
-          ...(edge ?? {}),
-          node: this.store.getNodeByClientId(clienId),
-        };
-      }),
-    };
+  concat = (...args: Parameters<Array<Pod>["concat"]>): Pod[] => {
+    return this.pods.concat(...args);
   };
 
-  concat = (...args: Parameters<Array<Node>["concat"]>): Node[] => {
-    return this.currentState.concat(...args);
+  entries = (): IterableIterator<[number, Pod]> => {
+    return this.pods.entries();
   };
 
-  entries = (): IterableIterator<[number, Node]> => {
-    return this.currentState.entries();
+  every = (...args: Parameters<Array<Pod>["every"]>): boolean => {
+    return this.pods.every(...args);
   };
 
-  every = (...args: Parameters<Array<Node>["every"]>): boolean => {
-    return this.currentState.every(...args);
+  filter = (...args: Parameters<Array<Pod>["filter"]>): Pod[] => {
+    return this.pods.filter(...args);
   };
 
-  filter = (...args: Parameters<Array<Node>["filter"]>): Node[] => {
-    return this.currentState.filter(...args);
+  find = (...args: Parameters<Array<Pod>["find"]>): Pod | undefined => {
+    return this.pods.find(...args);
   };
 
-  find = (...args: Parameters<Array<Node>["find"]>): Node | undefined => {
-    return this.currentState.find(...args);
+  findIndex = (...args: Parameters<Array<Pod>["findIndex"]>): number => {
+    return this.pods.findIndex(...args);
   };
 
-  findIndex = (...args: Parameters<Array<Node>["findIndex"]>): number => {
-    return this.currentState.findIndex(...args);
+  flat = <A, D extends number = 1>(...args: Parameters<Array<Pod>["flat"]>): FlatArray<A, D>[] => {
+    return this.pods.flat(...args) as FlatArray<A, D>[];
   };
 
-  flat = <A, D extends number = 1>(...args: Parameters<Array<Node>["flat"]>): FlatArray<A, D>[] => {
-    return this.currentState.flat(...args) as FlatArray<A, D>[];
+  flatMap = <U, This = undefined>(...args: Parameters<Array<Pod>["flatMap"]>): U[] => {
+    return this.pods.flatMap(...args) as U[];
   };
 
-  flatMap = <U, This = undefined>(...args: Parameters<Array<Node>["flatMap"]>): U[] => {
-    return this.currentState.flatMap(...args) as U[];
+  forEach = (...args: Parameters<Array<Pod>["forEach"]>): void => {
+    return this.pods.forEach(...args);
   };
 
-  forEach = (...args: Parameters<Array<Node>["forEach"]>): void => {
-    return this.currentState.forEach(...args);
+  includes = (...args: Parameters<Array<Pod>["includes"]>): boolean => {
+    return this.pods.includes(...args);
   };
 
-  includes = (...args: Parameters<Array<Node>["includes"]>): boolean => {
-    return this.currentState.includes(...args);
-  };
-
-  indexOf = (...args: Parameters<Array<Node>["indexOf"]>): number => {
-    return this.currentState.indexOf(...args);
+  indexOf = (...args: Parameters<Array<Pod>["indexOf"]>): number => {
+    return this.pods.indexOf(...args);
   }
 
-  join = (...args: Parameters<Array<Node>["join"]>): string => {
-    return this.currentState.join(...args);
+  join = (...args: Parameters<Array<Pod>["join"]>): string => {
+    return this.pods.join(...args);
   };
 
   keys = (): IterableIterator<number> => {
-    return this.currentState.keys();
+    return this.pods.keys();
   }
 
-  lastIndexOf = (...args: Parameters<Array<Node>["lastIndexOf"]>): number => {
-    return this.currentState.lastIndexOf(...args);
+  lastIndexOf = (...args: Parameters<Array<Pod>["lastIndexOf"]>): number => {
+    return this.pods.lastIndexOf(...args);
   };
 
-  map = <U>(...args: Parameters<Array<Node>["map"]>): U[] => {
-    return this.currentState.map(...args) as U[];
-  };
-
-  //@ts-ignore: weird typechecking issue
-  reduce = <U>(...args: Parameters<Array<Node>["reduce"]>): U => {
-    return this.currentState.reduce(...args) as U;
+  map = <U>(...args: Parameters<Array<Pod>["map"]>): U[] => {
+    return this.pods.map(...args) as U[];
   };
 
   //@ts-ignore: weird typechecking issue
-  reduceRight = <U>(...args: Parameters<Array<Node>["reduceRight"]>): U => {
-    return this.currentState.reduceRight(...args) as U;
+  reduce = <U>(...args: Parameters<Array<Pod>["reduce"]>): U => {
+    return this.pods.reduce(...args) as U;
   };
 
-  slice = (...args: Parameters<Array<Node>["slice"]>): Node[] => {
-    return this.currentState.slice(...args);
+  //@ts-ignore: weird typechecking issue
+  reduceRight = <U>(...args: Parameters<Array<Pod>["reduceRight"]>): U => {
+    return this.pods.reduceRight(...args) as U;
   };
 
-  some = (...args: Parameters<Array<Node>["some"]>): boolean => {
-    return this.currentState.some(...args);
+  slice = (...args: Parameters<Array<Pod>["slice"]>): Pod[] => {
+    return this.pods.slice(...args);
   };
 
-  values = (): IterableIterator<Node> => {
-    return this.currentState.values();
+  some = (...args: Parameters<Array<Pod>["some"]>): boolean => {
+    return this.pods.some(...args);
   };
 
-  get(index: number): Node | undefined {
-    return this.currentState[index];
+  values = (): IterableIterator<Pod> => {
+    return this.pods.values();
+  };
+
+  get(index: number): Pod | undefined {
+    return this.pods[index];
   };
 
   get hasUnsavedChanges(): boolean {
-    return this.aggregator.addedNodes.length > 0 || this.aggregator.addedNodes.length > 0;
+    return this.root.added.length > 0 || this.root.removed.length > 0;
   };
 
 
-  *[Symbol.iterator](): IterableIterator<Node> {
-    for (let node of this.currentState) {
-      yield node;
+  *[Symbol.iterator](): IterableIterator<Pod> {
+    for (let Pod of this.pods) {
+      yield Pod;
     }
   }
 

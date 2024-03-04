@@ -1,3 +1,5 @@
+// TODO: CONSIDER REMOVING THIS FILE
+
 export const PaginationKeyArgs = [
   '__typename',
   'after',

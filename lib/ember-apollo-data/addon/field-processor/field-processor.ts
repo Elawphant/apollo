@@ -1,5 +1,3 @@
-import type Owner from '@ember/owner';
-import { setOwner } from '@ember/application';
 import type { TirService } from 'ember-apollo-data/';
 import { configure } from 'ember-apollo-data/utils';
 
@@ -36,13 +34,16 @@ import { configure } from 'ember-apollo-data/utils';
 export default class FieldProcessor {
 
   public declare store: TirService;
+
+  public shouldProcess: boolean = false;
+  
   
   constructor(store: TirService) {
     configure(store, this);
   }
 
   /**
-   * Serializes the data to Node field data type
+   * Serializes the data to Pod field data type
    * Use this method when encapsulating response data
    * If not overwritten will return the data as is
    * @param { any } deserialized: non-serialized data received from server
@@ -62,4 +63,9 @@ export default class FieldProcessor {
   deserialize = (serialized: any): any => {
     return serialized;
   };
-}
+
+  /** Processes the value before assignment */
+  process = (value: any): any => {
+    return value;
+  };
+};

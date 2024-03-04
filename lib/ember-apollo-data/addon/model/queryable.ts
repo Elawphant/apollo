@@ -1,8 +1,6 @@
-import { configureErrorHandler } from './error';
 import type TirService from 'ember-apollo-data/services/tir';
-import type { NodeRegistry } from './registry';
-import type { RootQueryDescription } from 'ember-apollo-data/-private/util';
-import type { TAliasedNodeData, TAliasedConnectionData } from './types';
+import type { PodRegistry } from './registry';
+import type { TPodData, TStemData } from './types';
 import { configure } from 'ember-apollo-data/utils';
 
 export class Queryable {
@@ -52,7 +50,8 @@ export class Queryable {
     return Promise.resolve();
   };
 
-  public readonly errors;
+  // TODO
+  public readonly errors: any;
 
   get isSuccess() {
     return !this.isError;
@@ -68,7 +67,6 @@ export class Queryable {
 
   constructor(store: TirService) {
     configure(store, this);
-    this.errors = configureErrorHandler(this._meta);
   }
 
   public readonly resetErrors = () => {
@@ -92,13 +90,9 @@ export class Queryable {
     // }
   };
 
-  public encapsulate(data: TAliasedNodeData | TAliasedConnectionData): void {
+  public encapsulate(data: TPodData | TStemData): void {
     throw new Error("Queryable does not implement encapsulate, but one is expected on Node or Connection");
   };
-
-  protected get queryConfig(): { [modelName: keyof NodeRegistry]: RootQueryDescription } {
-    throw new Error(`Queryable does not implement queryConfig, but one is expected on Node or Connection`);
-  }
 
   public query = async (options?: any): Promise<void> => {
     // ignore variables set on options, allowing QueryDesigner to configure

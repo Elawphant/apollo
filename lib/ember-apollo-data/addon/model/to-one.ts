@@ -2,8 +2,8 @@ import type { RootQueryDescription } from "ember-apollo-data/-private/util";
 import type { Node } from ".";
 import type { RelationshipField } from "./field-mappings";
 import { Queryable } from "./queryable";
-import type { NodeRegistry } from "./registry";
-import type { TRelayNodeData } from "./node";
+import type { PodRegistry } from "./registry";
+import type { TRelayNodeData } from "./node-pod";
 import { assert } from "@ember/debug";
 import type TirService from "ember-apollo-data/services/tir";
 import { getOwner, setOwner } from "@ember/owner";
@@ -12,7 +12,7 @@ import { getOwner, setOwner } from "@ember/owner";
 
 
 export class ToOne extends Queryable {
-  declare private modelName: keyof NodeRegistry;
+  declare private modelName: keyof PodRegistry;
   declare private parentNode: Node;
   declare private fieldNameOnParent: string
 
@@ -35,7 +35,7 @@ export class ToOne extends Queryable {
 
   get queryParams() {
     const output: { [key: string]: RootQueryDescription } = {
-      [(this.parentNode.constructor as typeof Node).modelName as string]: {
+      [(this.parentNode.constructor as typeof Pod).modelName as string]: {
         type: "node",
         fields: [this.fieldNameOnParent],
         variables: {

@@ -1,7 +1,3 @@
-import { type FieldProcessor } from './index';
+import { FieldProcessor } from './index';
 
-export interface FieldProcessorRegistryInterface {
-  [fieldProcessorName: string]: typeof FieldProcessor;
-}
-
-export const FieldProcessorRegistry: FieldProcessorRegistryInterface = {};
+export type FieldProcessorRegistry = Record<string, typeof FieldProcessor>;

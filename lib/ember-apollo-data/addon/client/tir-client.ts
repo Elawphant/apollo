@@ -1,7 +1,7 @@
 import type ApplicationInstance from '@ember/application/instance';
 import { assert } from '@ember/debug';
 import type Owner from '@ember/owner';
-import { ADDON_PREFIX } from 'ember-apollo-data/-private/globals';
+import { ADDON_PREFIX, ERROR_MESSAGE_PREFIX } from 'ember-apollo-data/-private/globals';
 import {
   GraphQLClient,
 } from 'graphql-request';
@@ -16,10 +16,8 @@ class TirClient extends GraphQLClient {
     return {}
   };
 
-  constructor(owner: Owner) {
-    const env = (owner as ApplicationInstance).resolveRegistration('config:environment') as { [ADDON_PREFIX]?: Record<string, any> };
-    const config = env[ADDON_PREFIX];
-    assert(`You must configure "${ADDON_PREFIX}" in your application environment`, config);
+  // todo: improve type
+  constructor(config: Record<string, any>) {
     assert(`You must configure "endpoint" in your application environment ${ADDON_PREFIX}`, config["endpoint"]);
     super(config["endpoint"], {
       errorPolicy: config["errorPolicy"] ?? 'none',
@@ -35,7 +33,7 @@ class TirClient extends GraphQLClient {
 
   // TODO: implement subscribe
   subscribe = (...args: Parameters<GraphQLClient["request"]>) => {
-    throw new Error(`${ADDON_PREFIX}: Subscription is not currently supported.`)
+    throw new Error(`${ERROR_MESSAGE_PREFIX}Subscription is not currently supported.`)
   }
 }
 

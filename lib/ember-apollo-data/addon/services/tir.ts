@@ -1,18 +1,16 @@
 import Service from '@ember/service';
 import { getOwner } from '@ember/application';
-import Node from 'ember-apollo-data/model/node';
 import ApplicationInstance from '@ember/application/instance';
 import { assert } from '@ember/debug';
-import { Connection } from 'ember-apollo-data/model';
 import { InMemoryCache } from 'ember-apollo-data/caches/in-memory';
 import { TirClient } from 'ember-apollo-data/client/tir-client';
-import type { ConnectionRootRef, GraphQlErrorData, TAliasedNodeData } from 'ember-apollo-data/model/types';
-import type { NodeRegistry } from 'ember-apollo-data/model/registry';
+import type { RootRef, GraphQlErrorData, ClientId, Pod } from 'ember-apollo-data/model/types';
+import type { PodRegistry } from 'ember-apollo-data/model/registry';
 import type { RequestDocument, Variables } from 'graphql-request';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import type { GraphQLClientRequestHeaders } from 'ember-apollo-data/client/types';
 import { AbortablePromise } from 'ember-apollo-data/promise/promise';
-import type { AttrField, RelationshipField } from 'ember-apollo-data/model/field-mappings';
+import { ADDON_PREFIX, type EnvConfig } from 'ember-apollo-data/-private/globals';
 
 export default class TirService extends Service {
   private declare client: TirClient;
@@ -28,7 +26,22 @@ export default class TirService extends Service {
 
   public get SERVICE_NAME() {
     return this.__SERVICE_NAME;
-  }
+  };
+
+  /**
+   * Configuration defined on ENV for this addon
+   */
+  declare private CONFIG: EnvConfig;
+
+  public get config() {
+    return this.CONFIG;
+  };
+  public set config(config: EnvConfig) {
+    // set once
+    if (!this.CONFIG){
+      this.CONFIG = config;
+    };
+  };
 
   /**
    * Sets the name of the SERVICE_NAME.
@@ -42,65 +55,36 @@ export default class TirService extends Service {
     }
   }
 
-  public getIDInfo(modelName: keyof NodeRegistry) {
+  public getIDInfo(modelName: keyof PodRegistry) {
     return this.internalStore.getIDInfo(modelName);
   }
 
-  public getConnectionRoot = (ref: ConnectionRootRef) => {
-    return this.internalStore.getConnectionRoot(ref)
+  public getRoot = (ref: RootRef) => {
+    return this.internalStore.getRoot(ref);
   };
 
-  public getNode = (modelName: keyof NodeRegistry, primaryKey: string) => {
-    return this.internalStore.getNode(modelName, primaryKey);
+  public getPod = (modelName: keyof PodRegistry, primaryKey: string) => {
+    return this.internalStore.getPod(modelName, primaryKey);
   }
 
-  public getNodeByClientId = (clientId: Node["CLIENT_ID"]) => {
-    return this.internalStore.getNodeByClientId(clientId);
+  public getPodByClientId = (clientId: ClientId) => {
+    return this.internalStore.getPodByClientId(clientId);
   };
-
-  public getStateForNodeAttr = (clientId: Node["CLIENT_ID"], fieldName: AttrField["propertyName"]) => {
-    return this.internalStore.stateForField(clientId, fieldName)
-  };
-
-  public updateToManyRelation = (
-    parentNode: Node,
-    fieldName: RelationshipField["propertyName"],
-    childNodes: Node[]
-  ): void => {
-    this.internalStore.updateList(parentNode, fieldName, childNodes);
-  }
-
-  public getToManyRelation = (
-    modelName: keyof NodeRegistry,
-    fieldName: RelationshipField["propertyName"],
-    clientId: Node["CLIENT_ID"]
-  ) => {
-    return new Proxy(this.internalStore.getList(modelName, fieldName, clientId), {});
-  }
 
   public init(): void {
     super.init();
     const ClientClass = (getOwner(this) as ApplicationInstance).resolveRegistration(`client:application`) as typeof TirClient | undefined;
     assert(`An ApplicationClient extending Client must be implemented.`, ClientClass);
-    this.client = new ClientClass(getOwner(this));
+    const env = (getOwner(this) as ApplicationInstance).resolveRegistration('config:environment') as { [ADDON_PREFIX]?: EnvConfig };
+    assert(`You must configure "${ADDON_PREFIX}" in your application environment`, env && env[ADDON_PREFIX]);
+    this.config = env[ADDON_PREFIX];
+    this.client = new ClientClass(this.config);
     this.internalStore = new InMemoryCache(this);
     const [, serviceName] = this.toString().match(/service:(.*)::ember\d+/)!;
     assert(`Cannot initialize ${this.constructor.name ?? this.toString()} without proper naming.`, serviceName)
     this.SERVICE_NAME = serviceName as string;
   };
-
-
-  /**
-   * Removes all connections of same type relate to the inputted one from the internalStore, including the inutted connection.
-   * 
-   * If the inputted connection is a relation, this method will affect only relations on the parent node.
-   * 
-   * If `includeCurrent` is false, the inputted connection will not be removed.
-   */
-  public clearRelatedConnections = (connection: Connection, includeCurrent: boolean = true) => {
-    // this.internalStore.invalidateAllInterrelatedConnections(connection, includeCurrent);
-  };
-
+  
 
   public request = async (
     document: RequestDocument | TypedDocumentNode<unknown, Variables>,
@@ -142,10 +126,6 @@ export default class TirService extends Service {
     return abortablePromise;
   };
 
-  public getStateForNodeFields = (clientId: Node["CLIENT_ID"]) => {
-    return this.internalStore.getStateForNodeFields(clientId);
-  };
-
   /**
    * Creates in-memory cache object with default values, encapsulates it and returns a proxy to it.
    * If you need initial values, instead pass them via @attr options.defaultValue or the transformer that does encapsulation.
@@ -154,29 +134,27 @@ export default class TirService extends Service {
    * @param options
    * @returns
    */
-  create = (modelName: keyof NodeRegistry) => {
-    return this.internalStore.createNode(modelName)!;
+  create = (modelName: keyof PodRegistry) => {
+    return this.internalStore.createPod(modelName)!;
   };
 
-
-  addNode = (modelName: string, data: TAliasedNodeData): Node => {
-    return this.internalStore.addNode(modelName, data);
-  };
-
-  public modelFor = (modelName: string): typeof Node => {
+  public modelFor = (modelName: string): typeof Pod => {
     return this.internalStore.modelFor(modelName);
   };
+  
+  /** Retrievs the all field meta information for modelName */
+  public getFieldMeta = (modelName: keyof PodRegistry) => {
+    return this.internalStore.getFieldMetaForType(modelName);
+  };
 
-  public revertNode = (node: Node) => {
-    this.internalStore.revert(node.CLIENT_ID);
+  // TODO: consider removing from here, if not needed
+  public getRemovedPods = (): Set<ClientId> => {
+    return this.internalStore.getRemovedPods();
   }
 
-  public getRemovedNodes = (): Set<Node["CLIENT_ID"]> => {
-    return this.internalStore.getRemovedNodes();
-  }
-
-  public markNodeForRemoval = (clientId: Node["CLIENT_ID"]): void => {
-    this.internalStore.markNodeForRemoval(clientId);
+  // TODO: consider removing from here
+  public markPodForRemoval = (clientId: ClientId): void => {
+    this.internalStore.markPodForRemoval(clientId);
   }
 
 };
