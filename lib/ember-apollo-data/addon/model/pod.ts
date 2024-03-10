@@ -1,15 +1,14 @@
-import { configure } from "ember-apollo-data/utils";
-import type { TirService } from "ember-apollo-data/";
-import { clientIdFor } from "ember-apollo-data/-private/client-id";
-import { ERROR_MESSAGE_PREFIX } from "ember-apollo-data/-private/globals";
-import { dasherize } from "@ember/string";
-import type { PodRegistry } from "./registry";
-import type { AttrField, RelationshipField } from "./field-mappings";
-import type { ScalarRoot } from "ember-apollo-data/caches/scalar-root";
-import type { ConnectionRoot } from "ember-apollo-data/caches/connection-root";
-import type { NodeRoot } from "ember-apollo-data/caches/node-root";
-
-
+import { configure } from 'ember-apollo-data/utils';
+import type TirService from 'ember-apollo-data/services/tir';
+import { clientIdFor } from 'ember-apollo-data/-private/client-id';
+import { ERROR_MESSAGE_PREFIX } from 'ember-apollo-data/-private/globals';
+import { dasherize } from '@ember/string';
+import type { PodRegistry } from './registry';
+import type { AttrField, RelationshipField } from './field-mappings';
+import type { ScalarRoot } from 'ember-apollo-data/caches/scalar-root';
+import type { ConnectionRoot } from 'ember-apollo-data/caches/connection-root';
+import type { NodeRoot } from 'ember-apollo-data/caches/node-root';
+import type { Meta } from './utils';
 
 // TODO: review example in the end
 /**
@@ -30,7 +29,7 @@ import type { NodeRoot } from "ember-apollo-data/caches/node-root";
  *  @hasMany('author')
  *  declare authors: Stem<Author>
  *  @belongsTo('publisher')
- *  declare publisher: Pod<Publisher> // Publisher pod
+ *  declare publisher: NodeRoot<Publisher> // Publisher pod
  *
  * ```
  * Now to instantiate it, we call `store.node('book', {id: "RXNob3A6UmpWMmpraWVwRTJyb1BheVlmU3JvOQ=="})`;
@@ -39,24 +38,27 @@ import type { NodeRoot } from "ember-apollo-data/caches/node-root";
  */
 class Pod {
   declare readonly store: TirService;
-  declare private readonly dataState: Map<(AttrField | RelationshipField)["dataKey"], ScalarRoot<any> | NodeRoot | ConnectionRoot>;
+  private declare readonly dataState: Map<
+    (AttrField | RelationshipField)['dataKey'],
+    ScalarRoot<any> | NodeRoot<Pod> | ConnectionRoot<Pod>
+  >;
   declare static modelName: string;
-  declare public readonly CLIENT_ID: `${keyof PodRegistry}:${number}`;
+  public declare readonly CLIENT_ID: `${keyof PodRegistry}:${number}`;
 
   [key: string]: any;
 
   constructor(store: TirService) {
     configure(store, this);
     this.CLIENT_ID = clientIdFor((this.constructor as typeof Pod).modelName);
-  }
+  };
 
   public get isPartial(): boolean {
-    return Object.values(this.dataState).every(field => field.loaded);
+    return Object.values(this.dataState).every((field) => field.loaded);
   };
 
   /**
-   * TODO: implement graphql folder with types to 
-   * send a mutation to the server.
+   * TODO: implement graphql folder with types to
+   * Sends a respective mutation to the server if corresponding mutations are present in the grpahql folder.
    */
   public save = async (): Promise<void> => {
     // this.store.request();
@@ -66,39 +68,39 @@ class Pod {
     this.store.markPodForRemoval(this.CLIENT_ID);
   };
 
-  /** 
-   * Rollbacks changes on the node. 
+  /**
+   * Rollbacks changes on the node.
    * Method name is revert instead of rollBackAttributes
    * to be clear that not only attr fields are being rolled back
-  */
+   */
   public revert = () => {
     // TODO
   };
 
   static get isModel(): boolean {
     return true;
-  };
+  }
 
   /**
-  * If this property is `true` the record is in the `dirty` state. The
-  * record has local changes that have not yet been saved by the
-  * adapter. This includes records that have been created (but not yet
-  * saved) or deleted.
-  * Example
-  * ```javascript
-  * let record = store.createRecord('model');
-  * record.hasDirtyAttributes; // true
-  *  * store.findRecord('model', 1).then(function(model) {
-  *   model.hasDirtyAttributes; // false
-  *   model.set('foo', 'some value');
-  *   model.hasDirtyAttributes; // true
-  * });
-  * ```
-  * @property hasDirtyAttributes
-  * @public
-  * @type {Boolean}
-  * @readOnly
-  */
+   * If this property is `true` the record is in the `dirty` state. The
+   * record has local changes that have not yet been saved by the
+   * adapter. This includes records that have been created (but not yet
+   * saved) or deleted.
+   * Example
+   * ```javascript
+   * let record = store.createRecord('model');
+   * record.hasDirtyAttributes; // true
+   *  * store.findRecord('model', 1).then(function(model) {
+   *   model.hasDirtyAttributes; // false
+   *   model.set('foo', 'some value');
+   *   model.hasDirtyAttributes; // true
+   * });
+   * ```
+   * @property hasDirtyAttributes
+   * @public
+   * @type {Boolean}
+   * @readOnly
+   */
   public get hasDirtyAttributes() {
     // TODO: implement
     // for (const [name, attrField] of this.__attributes__) {
@@ -109,71 +111,36 @@ class Pod {
     return false;
   }
 
-
   /**
-  * If this property is `true` the record is in the `saving` state. A
-  * record enters the saving state when `save` is called, but the
-  * adapter has not yet acknowledged that the changes have been
-  * persisted to the backend.
-  *  Example
-  * ```javascript
-  * let record = store.createRecord('model');
-  * record.isSaving; // false
-  * let promise = record.save();
-  * record.isSaving; // true
-  * promise.then(function() {
-  *   record.isSaving; // false
-  * });
-  * ```
-  *
-  * @property isSaving
-  * @public
-  * @type {Boolean}
-  * @readOnly
-  */
+   * If this property is `true` the record is in the `saving` state. A
+   * record enters the saving state when `save` is called, but the
+   * adapter has not yet acknowledged that the changes have been
+   * persisted to the backend.
+   *  Example
+   * ```javascript
+   * let record = store.createRecord('model');
+   * record.isSaving; // false
+   * let promise = record.save();
+   * record.isSaving; // true
+   * promise.then(function() {
+   *   record.isSaving; // false
+   * });
+   * ```
+   *
+   * @property isSaving
+   * @public
+   * @type {Boolean}
+   * @readOnly
+   */
   public get isSaving(): boolean {
     // TODO: implement
     return false;
-  };
+  }
 
-
-  /**
-  * TODO review: maybe convert to getter
-  * If this property is `true` the record is in the `deleted` state
-  * and has been marked for deletion. When `isDeleted` is true and
-  * `hasDirtyAttributes` is true, the record is deleted locally but the deletion
-  * was not yet persisted. When `isSaving` is true, the change is
-  * in-flight. When both `hasDirtyAttributes` and `isSaving` are false, the
-  * change has persisted.
-  *   Example
-  *   ```javascript
-  * let record = store.createRecord('model');
-  * record.isDeleted;    // false
-  * record.deleteRecord();
-  *   // Locally deleted
-  * record.isDeleted;           // true
-  * record.hasDirtyAttributes;  // true
-  * record.isSaving;            // false
-  *   // Persisting the deletion
-  * let promise = record.save();
-  * record.isDeleted;    // true
-  * record.isSaving;     // true
-  *   // Deletion Persisted
-  * promise.then(function() {
-  *   record.isDeleted;          // true
-  *   record.isSaving;           // false
-  *   record.hasDirtyAttributes; // false
-  * });
-  * ```
-  * @property isDeleted
-  * @public
-  * @type {Boolean}
-  * @readOnly
-  */
+  // TODO: check reactivity
   public get isDeleted(): boolean {
     return this.store.getRemovedPods().has(this.CLIENT_ID);
-  };
-
+  }
 
   /**
   If this property is `true` the record is in the `new` state. A
@@ -198,30 +165,24 @@ class Pod {
   @readOnly
   */
   public get isNew() {
-    const { propertyName } = this.store.getIDInfo((this.constructor as typeof Pod).modelName);
+    const { propertyName } = this.store.getIDInfo(
+      (this.constructor as typeof Pod).modelName,
+    );
     return this[propertyName] !== undefined;
   }
 
   /**
-  * If the record is in the dirty state this property will report what
-  * kind of change has caused it to move into the dirty
-  * state. Possible values are:
-  * 
-  * - `created` The record has been created by the client and not yet saved to the adapter.
-  * - `updated` The record has been updated by the client and not yet saved to the adapter.
-  * - `deleted` The record has been deleted by the client and not yet saved to the adapter.
-  * Example
-  * ```javascript
-  * let record = store.createRecord('model');
-  * record.dirtyType; // 'created'
-  * ```
-  * 
-  * @property dirtyType
-  * @public
-  * @type {String}
-  * @readOnly
-  */
+   *
+   * If the record is in the dirty state this property will report what
+   * kind of change has caused it to move into the dirty
+   * state. Possible values are:
+   *
+   * - `created` The record has been created by the client and not yet saved to the adapter.
+   * - `updated` The record has been updated by the client and not yet saved to the adapter.
+   * - `deleted` The record has been deleted by the client and not yet saved to the adapter.
+   */
   public get dirtyType() {
+    // TODO: not implemented
     // if (!get(this.)) {
     //   return "created";
     // }
@@ -234,25 +195,36 @@ class Pod {
     return null;
   }
 
-  // TODO: add docstring
+  /**
+   *
+   * @returns
+   */
   public toString() {
     return `<${dasherize(ERROR_MESSAGE_PREFIX)}-model:${this.CLIENT_ID}>`;
   }
 
-  public get Meta(){
-    const Meta = this.store.getFieldMeta((this.constructor as typeof Pod).modelName);
-    return new Map(Meta);
-  };
+  // public get Meta() {
+  //   const Meta = this.store.getFieldMeta(
+  //     (this.constructor as typeof Pod).modelName,
+  //   );
+  //   return new Map(Meta);
+  // }
 
-  public static META: {
-    fields: Record<(AttrField | RelationshipField)["dataKey"], AttrField | RelationshipField>;
-    properties: Record<(AttrField | RelationshipField)["propertyName"], (AttrField | RelationshipField)["dataKey"]>
-  } = {
-    fields: {},
-    properties: {},
-  };
+  declare static META: Meta
 
-};
-
+  // public static META: {
+  //   fields: Record<
+  //     (AttrField | RelationshipField)['dataKey'],
+  //     AttrField | RelationshipField
+  //   >;
+  //   properties: Record<
+  //     (AttrField | RelationshipField)['propertyName'],
+  //     (AttrField | RelationshipField)['dataKey']
+  //   >;
+  // } = {
+  //   fields: {},
+  //   properties: {},
+  // };
+}
 
 export { Pod };

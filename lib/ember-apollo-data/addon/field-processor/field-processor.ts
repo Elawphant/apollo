@@ -1,4 +1,4 @@
-import type { TirService } from 'ember-apollo-data/';
+import type TirService from 'ember-apollo-data/services/tir';
 import { configure } from 'ember-apollo-data/utils';
 
 /**
@@ -32,12 +32,10 @@ import { configure } from 'ember-apollo-data/utils';
  * Now Person has access to the apolloDataStore and session services.
  */
 export default class FieldProcessor {
-
   public declare store: TirService;
 
   public shouldProcess: boolean = false;
-  
-  
+
   constructor(store: TirService) {
     configure(store, this);
   }
@@ -68,4 +66,4 @@ export default class FieldProcessor {
   process = (value: any): any => {
     return value;
   };
-};
+}

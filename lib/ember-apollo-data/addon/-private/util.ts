@@ -1,6 +1,6 @@
-import type { TirService } from "ember-apollo-data/";
-import type { Pod } from "ember-apollo-data/model";
-import type { Variables } from "graphql-request";
+import type TirService from 'ember-apollo-data/services/tir';
+import type { Pod } from 'ember-apollo-data/model';
+import type { Variables } from 'graphql-request';
 
 export type DecoratorPropertyDescriptor =
   | (PropertyDescriptor & { initializer?: any })
@@ -13,12 +13,12 @@ export type ElementDescriptor = [
 ];
 
 export type PodDescriptor = [
-  target: { store: TirService } & typeof Pod["prototype"],
+  target: { store: TirService } & (typeof Pod)['prototype'],
   propertyName: string,
   descriptor?: DecoratorPropertyDescriptor,
 ];
 
-// TODO: consider removing
+// TODO: This is not used, consider removing
 // https://github.com/emberjs/ember.js/blob/70bcd9facdaf37ba19f60e6a10a511a34724f0f4/packages/%40ember/-internals/metal/lib/decorator.ts#L20-L41
 export function isElementDescriptor(args: any) {
   const [maybeTarget, maybeKey, maybeDesc] = args;
@@ -39,10 +39,11 @@ export function isElementDescriptor(args: any) {
       // TS compatibility
       maybeDesc === undefined)
   );
-};
+}
 
 export function identifyConnection(variables: Variables) {
-  const { first, last, before, after, offset, ...unsortableVariables } = variables;
+  const { first, last, before, after, offset, ...unsortableVariables } =
+    variables;
 
   // sort paginfo
   const obj = {
@@ -54,4 +55,4 @@ export function identifyConnection(variables: Variables) {
     ...unsortableVariables,
   };
   return String(obj);
-};
+}

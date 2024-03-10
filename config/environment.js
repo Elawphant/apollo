@@ -38,6 +38,9 @@ module.exports = function (environment) {
 
     ENV.APP.rootElement = '#ember-testing';
     ENV.APP.autoboot = false;
+    ENV.Tir = {
+      
+    }
   }
 
   if (environment === 'production') {

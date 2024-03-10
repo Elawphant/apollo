@@ -1,7 +1,7 @@
-import Client from 'ember-apollo-data/client';
+import { TirClient } from 'ember-apollo-data/client';
 
-export default class ApplicationClient extends Client {
-  public get endpoint(): string {
-    return 'http://127.0.0.1:8000/graphql_dashboard_v1';
-  } 
+export default class ApplicationClient extends TirClient {
+  // public get endpoint(): string {
+  //   return 'http://127.0.0.1:8000/graphql_dashboard_v1';
+  // }
 }

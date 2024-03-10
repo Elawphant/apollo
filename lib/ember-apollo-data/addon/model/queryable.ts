@@ -4,31 +4,30 @@ import type { TPodData, TStemData } from './types';
 import { configure } from 'ember-apollo-data/utils';
 
 export class Queryable {
-  declare public store: TirService;
+  public declare store: TirService;
   _meta: any = {};
 
-
-  declare public readonly isNode: boolean;
+  public declare readonly isNode: boolean;
 
   public queryInProgress: Promise<any> | undefined = undefined;
 
   private __hasLoaded: boolean = false;
 
-  get loaded(){
+  get loaded() {
     return this.__hasLoaded;
   }
 
   setLoadedOnce = () => {
-    if (!this.__hasLoaded){
+    if (!this.__hasLoaded) {
       this.__hasLoaded = true;
     }
-  }
+  };
 
-  private registerQueryInProgress = async(promise: Promise<any>) => {
+  private registerQueryInProgress = async (promise: Promise<any>) => {
     this.queryInProgress = promise;
     await promise;
     this.queryInProgress = undefined;
-  }
+  };
 
   public readonly afterQuery = (
     onFulfilled: (...any: any) => any,
@@ -91,16 +90,17 @@ export class Queryable {
   };
 
   public encapsulate(data: TPodData | TStemData): void {
-    throw new Error("Queryable does not implement encapsulate, but one is expected on Node or Connection");
-  };
+    throw new Error(
+      'Queryable does not implement encapsulate, but one is expected on Node or Connection',
+    );
+  }
 
   public query = async (options?: any): Promise<void> => {
     // ignore variables set on options, allowing QueryDesigner to configure
-    if (options && options['variables']){
+    if (options && options['variables']) {
       delete options['variables'];
     }
     // this.registerQueryInProgress(this.store.request());
     this.setLoadedOnce();
   };
-
 }

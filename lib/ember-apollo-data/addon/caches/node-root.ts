@@ -1,44 +1,41 @@
-import type { ClientId } from "ember-apollo-data/model/types";
-import { ScalarRoot } from "./scalar-root";
-import { FieldProcessor } from "ember-apollo-data/field-processor";
-import type { RelationshipField } from "ember-apollo-data/model/field-mappings";
-import type { InMemoryCache } from "./in-memory";
+import type { ClientId, Pod } from 'ember-apollo-data/model/types';
+import { ScalarRoot } from './scalar-root';
 
+class NodeRoot<T extends Pod> extends ScalarRoot<ClientId | null> {
+  private declare parentClientId: ClientId;
 
+  protected declare clientId: `${string}:${number}`;
 
-// TODO: implement getters and setters to update relation
-class NodeRoot extends ScalarRoot<ClientId | null> {
-    declare private parentClientId: ClientId
+  public get isRelation() {
+    return this.clientId !== undefined;
+  }
 
-    declare private relationUpdater: InMemoryCache["updateRoot"];
+  public set = (clientId: ClientId | null) => {
+    this.update(clientId, false, false);
+  };
 
-    declare protected clientId: `${string}:${number}`;
+  public getPod: (index: number) => Pod | null = (index:number) => {
+    return this.value ? this.store.getPodByClientId(this.value) ?? null : null;
+  };
 
-    public get isRelation() {
-        return Boolean(this.clientId);
+  public update = (
+    clientId: ClientId | null,
+    updateInitial?: boolean,
+    markLoaded?: boolean,
+  ) => {
+    this.value = clientId;
+    if (updateInitial) {
+      if (clientId) {
+        this.store.registerBond(clientId, this.rootKey, updateInitial);
+      } else if (this.initial) {
+        this.store.unregisterBond(this.initial, this.rootKey, updateInitial);
+      }
+      this.initial = this.value;
     }
-
-
-    // TODO: replace InMemoryCache["updateRoot"] with TirCache["updateRoot"] abstract method for compatibility improvement
-    constructor(
-        initial: ClientId | null,
-        dataKey: RelationshipField["dataKey"],
-        clientId: ClientId,
-        relationUpdater: InMemoryCache["updateRoot"],
-        processor?: FieldProcessor | undefined,
-    ) {
-        super(initial, dataKey, clientId, processor);
-        this.relationUpdater = relationUpdater;
-    };
-
-    // TODO
-    public set = (clientId: ClientId | null) => {
-        this.value = clientId;
-        // this.relationUpdater(this.clientId, this.dataKey, pod);
-    };
-
-    
-
+    if (markLoaded) {
+      this.markLoaded();
+    }
+  };
 }
 
 export { NodeRoot };

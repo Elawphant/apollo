@@ -2,15 +2,23 @@ import { assert } from '@ember/debug';
 import type { AttrField } from './field-mappings';
 import type { Pod } from '.';
 import { ERROR_MESSAGE_PREFIX } from 'ember-apollo-data/-private/globals';
+import { ensurePodMeta } from './utils';
 
+function attr(options?: {
+  dataKey?: string;
+  defaultValue?: any;
+  fieldProcessorName?: string;
+}): PropertyDecorator {
+  return function (
+    target: Pod['prototype'],
+    propertyName: string | symbol,
+  ): void {
+    assert(
+      `${ERROR_MESSAGE_PREFIX}Decorator ${attr.prototype.name} can only be applied to "string" properties`,
+      typeof propertyName === 'string',
+    );
 
-function attr(
-  options?: { dataKey?: string; defaultValue?: any, fieldProcessorName?: string },
-): PropertyDecorator {
-
-  return function (target: Pod["prototype"], propertyName: string | symbol): void {
-    const prototype = target as Pod["prototype"];
-    assert(`${ERROR_MESSAGE_PREFIX}Decorator ${attr.prototype.name} can only be applied to "string" properties`, typeof propertyName === "string");
+    ensurePodMeta(target);
 
     const { dataKey, defaultValue, fieldProcessorName } = options ?? {};
 
@@ -22,33 +30,14 @@ function attr(
       defaultValue: defaultValue ?? null,
     };
 
-    Object.assign(prototype.META.fields, {
-      [dataKey ?? propertyName]: meta
+    Object.assign(target.constructor.META.fields, {
+      [dataKey ?? propertyName]: meta,
     });
 
-    Object.assign(prototype.META.properties, {
-      [propertyName]: dataKey ?? propertyName
-    });
-
-    Object.defineProperty<Pod>(target, propertyName, {
-      get() {
-        const modelName = target.constructor.modelName;
-        return this.store.getRoot({
-          modelName: modelName,
-          root: dataKey ?? propertyName,
-          client: target.CLIENT_ID
-        }).currentValue;
-      },
-      set(value: any) {
-        const modelName = target.constructor.modelName;
-        this.store.updateRoot({
-          modelName: modelName,
-          root: dataKey ?? propertyName,
-          client: target.CLIENT_ID
-        }, value, null, null);
-      },
+    Object.assign(target.constructor.META.properties, {
+      [propertyName]: dataKey ?? propertyName,
     });
   };
-};
+}
 
-export default attr;
+export { attr };

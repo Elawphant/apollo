@@ -1,57 +1,68 @@
 import { Pod } from './pod';
 import { assert } from '@ember/debug';
 import { type RelationshipField } from './field-mappings';
-import type {
-  DecoratorPropertyDescriptor,
-  ElementDescriptor,
-} from 'ember-apollo-data/-private/util';
+import { ERROR_MESSAGE_PREFIX } from 'ember-apollo-data/-private/globals';
 
-/**
- *
- */
 function belongsTo(
   modelName: string,
   options: {
-    inverse: string,
-    attrName?: string;
+    dataKey?: string;
+    inverse: string;
     fieldProcessorName?: string;
+    polymorphic?: boolean;
   },
-): PropertyDecorator;
-function belongsTo(
-  modelName: string,
-  options: {
-    inverse: string,
-    attrName?: string;
-    fieldProcessorName?: string;
-  },
-  ...args: [ElementDescriptor[0], ElementDescriptor[1]]
-): void;
-function belongsTo(
-  modelName: string,
-  options: {
-    inverse: string,
-    attrName?: string;
-    fieldProcessorName?: string;
-  },
-  ...args: ElementDescriptor
-): DecoratorPropertyDescriptor;
-function belongsTo(
-  modelName: string,
-  options: {
-    inverse: string,
-    attrName?: string;
-    fieldProcessorName?: string;
-  },
-  ...args: [] | [ElementDescriptor[0], ElementDescriptor[1]] | ElementDescriptor
-): PropertyDecorator | DecoratorPropertyDescriptor | void {
+): PropertyDecorator {
   assert(
-    `An explicit modelName must be provided as first argument to belongsTo.`,
+    `An explicit modelName must be provided as first argument to "${belongsTo.prototype.name}".`,
     !modelName || (modelName && typeof modelName === 'string'),
   );
 
-  return function (target: any, propertyName: string | symbol): any {
-    
+  return function (
+    target: Pod['prototype'],
+    propertyName: string | symbol,
+  ): void {
+    const prototype = target as Pod['prototype'];
+    assert(
+      `${ERROR_MESSAGE_PREFIX}Decorator ${belongsTo.prototype.name} can only be applied to "string" properties`,
+      typeof propertyName === 'string',
+    );
+
+    const { dataKey, inverse, polymorphic } = options ?? {};
+
+    const meta: RelationshipField = {
+      modelName: modelName,
+      propertyName: propertyName,
+      fieldType: 'relationship',
+      relationshipType: 'belongsTo',
+      dataKey: dataKey ?? propertyName,
+      polymorphic: polymorphic,
+      inverse: inverse,
+      defaultValue: undefined,
+      fieldProcessorName: undefined,
+    };
+
+    Object.assign(prototype.META.fields, {
+      [dataKey ?? propertyName]: meta,
+    });
+
+    Object.assign(prototype.META.properties, {
+      [propertyName]: dataKey ?? propertyName,
+    });
+
+    Object.defineProperty<Pod>(target, propertyName, {
+      get() {
+        const modelName = target.constructor.modelName;
+        return new Proxy(
+          this.store.getRoot({
+            modelName: modelName,
+            root: dataKey ?? propertyName,
+            client: target.CLIENT_ID,
+          }),
+          {},
+        );
+      },
+    });
   };
 }
 
-export default belongsTo;
+export { belongsTo };
