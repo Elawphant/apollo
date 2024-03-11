@@ -1,7 +1,7 @@
 import Route from '@ember/routing/route';
 import { service } from '@ember/service';
 import type User from 'apollo/pods/user';
-import type TirService from 'ember-apollo-data/services/tir';
+import type TirService from 'tir/services/tir';
 import { gql } from 'graphql-request';
 
 export default class ApplicationRoute extends Route {

@@ -1,4 +1,4 @@
-import TirService from 'ember-apollo-data/services/tir';
+import TirService from 'tir/services/tir';
 
 export default class StoreService extends TirService {}
 

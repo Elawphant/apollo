@@ -9,11 +9,11 @@
       "apollo/tests/*": ["tests/*"],
       "apollo/*": ["app/*"],
       "*": ["types/*"],
-      "ember-apollo-data": [
-        "lib/ember-apollo-data/addon",
+      "tir": [
+        "lib/tir/addon",
       ],
-      "ember-apollo-data/*": [
-        "lib/ember-apollo-data/addon/*",
+      "tir/*": [
+        "lib/tir/addon/*",
       ],
 
     }

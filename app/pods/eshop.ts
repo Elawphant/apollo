@@ -1,6 +1,6 @@
-import { Pod, attr, hasMany, belongsTo } from 'ember-apollo-data/model';
+import { Pod, attr, hasMany, belongsTo } from 'tir/model';
 import type Entrepreneurship from './entrepreneurship';
-import type { NodeRoot } from 'ember-apollo-data/caches/node-root';
+import type { NodeRoot } from 'tir/caches/node-root';
 
 export default class Eshop extends Pod {
   @belongsTo('entrepreneurship', { inverse: 'eshops' })

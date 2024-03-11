@@ -1,4 +1,4 @@
-import { TirClient } from 'ember-apollo-data/client';
+import { TirClient } from 'tir/client';
 
 export default class ApplicationClient extends TirClient {
   // public get endpoint(): string {
