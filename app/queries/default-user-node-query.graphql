@@ -1,0 +1,5 @@
+query UserNodeQuery ($id : ID!) {
+    node__UserPod: node (id: $id) {
+        id
+    }
+}

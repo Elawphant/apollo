@@ -14,7 +14,7 @@ class NodeRoot<T extends Pod> extends ScalarRoot<ClientId | null> {
     this.update(clientId, false, false);
   };
 
-  public getPod: (index: number) => Pod | null = (index:number) => {
+  public getPod: (index: number) => Pod | null = (index: number) => {
     return this.value ? this.store.getPodByClientId(this.value) ?? null : null;
   };
 

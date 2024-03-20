@@ -50,11 +50,11 @@ class Pod {
   constructor(store: TirService) {
     configure(store, this);
     this.CLIENT_ID = clientIdFor((this.constructor as typeof Pod).modelName);
-  };
+  }
 
   public get isPartial(): boolean {
     return Object.values(this.dataState).every((field) => field.loaded);
-  };
+  }
 
   /**
    * TODO: implement graphql folder with types to
@@ -210,7 +210,7 @@ class Pod {
   //   return new Map(Meta);
   // }
 
-  declare static META: Meta
+  declare static META: Meta;
 
   // public static META: {
   //   fields: Record<

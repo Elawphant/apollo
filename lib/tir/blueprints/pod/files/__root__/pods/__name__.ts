@@ -1,5 +1,7 @@
-import { NodePod, attr, hasMany } from 'tir/model';
+import { NodePod, attr, hasMany, belongsTo } from 'tir/model';
 
 export default class <%= classifiedModuleName %> extends NodePod {
-  // Your model code here
+
+  <%= podFields %>
+  
 }

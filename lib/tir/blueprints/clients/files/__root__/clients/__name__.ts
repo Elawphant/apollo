@@ -1,16 +1,16 @@
 
 
-import Client from 'tir/client';
+import { TirClient } from 'tir/client';
 
 
-export default class <%= classifiedModuleName %>Client extends Client {
+export default class <%= classifiedModuleName %> Client extends TirClient {
 
-    endpoint: string = "";
+  endpoint: string = "";
 
     public headers: Record<string, string> = {};
 
     public dynamicHeaders = () => {
-      return this.headers;
-    }
-  
+    return this.headers;
+  }
+
 }

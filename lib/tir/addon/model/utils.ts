@@ -1,5 +1,5 @@
-import type { Pod } from ".";
-import type { AttrField, RelationshipField } from "./field-mappings";
+import type { Pod } from '.';
+import type { AttrField, RelationshipField } from './field-mappings';
 
 /**
  * Given graphql response data and error path,
@@ -35,24 +35,24 @@ function getObjectAtPath(
     return;
   }, data);
   return result;
-};
-
+}
 
 class Meta {
   isMeta: true = true;
-  fields: Record<(AttrField | RelationshipField)['propertyName'], (AttrField | RelationshipField)> = {};
+  fields: Record<
+    (AttrField | RelationshipField)['propertyName'],
+    AttrField | RelationshipField
+  > = {};
   properties: Record<
     (AttrField | RelationshipField)['propertyName'],
     (AttrField | RelationshipField)['dataKey']
   > = {};
 }
 
-
 const ensurePodMeta = (target: Pod['prototype']) => {
-  if (!target.constructor.META){
-    target.constructor.META = new Meta()
-  };
-}
-
+  if (!target.constructor.META) {
+    target.constructor.META = new Meta();
+  }
+};
 
 export { getObjectAtPath, ensurePodMeta, type Meta };

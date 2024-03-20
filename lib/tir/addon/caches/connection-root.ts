@@ -22,8 +22,9 @@ class ConnectionRoot<T extends Pod>
   }
 
   constructor(store: TirService, ref: RootRef) {
+    //@ts-ignore: ok for destructured properties to be undefined
     const { modelName, root, clientId } = ref;
-    super(store, tracked(new Set<ClientId>()), modelName, root, clientId);
+    super(store, tracked(new Set<ClientId>()), modelName ?? clientId.split('::')[0]!, root, clientId);
     this.connections = new Map();
   }
 

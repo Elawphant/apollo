@@ -1,0 +1,5 @@
+query <%= classifiedModuleName %>ConnectionQuery <%= connection.queryParamVars %> {
+    <%= connection.alias %>: <%= connection.connectionRoot %> <%= connection.queryParams %> {
+        <%= connection.queryFields %>
+    }
+}

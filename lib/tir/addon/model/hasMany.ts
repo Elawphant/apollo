@@ -47,7 +47,6 @@ function hasMany(
     Object.assign(prototype.META.properties, {
       [propertyName]: dataKey ?? propertyName,
     });
-
   };
 }
 

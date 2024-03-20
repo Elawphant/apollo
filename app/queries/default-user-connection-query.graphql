@@ -1,0 +1,17 @@
+query UserConnectionQuery ($first: 'Int', $last: 'Int', $before: 'String', $after: 'String', $offset: 'Int') {
+    users__UserStem: usersConnection (first: $first, last: $last, before: $before, after: $after, offset: $offset) {
+        
+          edges {
+            node {
+              id
+            }
+          }
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
+            startCursor
+            endCursor        
+          }
+        
+    }
+}

@@ -1,0 +1,5 @@
+query <%= classifiedModuleName %>NodeQuery ($id : ID!) {
+    node__<%= classifiedModuleName %><%= node.namingConventionForItem %>: node (id: $id) {
+        <%= node.queryFields %>
+    }
+}

@@ -4,21 +4,13 @@ import ApplicationInstance from '@ember/application/instance';
 import { assert } from '@ember/debug';
 import { InMemoryCache } from 'tir/caches/in-memory';
 import { TirClient } from 'tir/client/tir-client';
-import type {
-  RootRef,
-  GraphQlErrorData,
-  ClientId,
-  Pod,
-} from 'tir/model/types';
+import type { RootRef, GraphQlErrorData, ClientId, Pod } from 'tir/model/types';
 import type { PodRegistry } from 'tir/model/registry';
 import type { RequestDocument, Variables } from 'graphql-request';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import type { GraphQLClientRequestHeaders } from 'tir/client/types';
 import { AbortablePromise } from 'tir/promise/promise';
-import {
-  ADDON_PREFIX,
-  type EnvConfig,
-} from 'tir/-private/globals';
+import { ADDON_PREFIX, type EnvConfig } from 'tir/-private/globals';
 import type { TirCache } from 'tir/caches/cache';
 
 export default class TirService extends Service {
@@ -158,8 +150,12 @@ export default class TirService extends Service {
     this.internalStore.registerBond(...args);
   };
 
-  public unregisterBond = (...args: Parameters<TirCache['unregisterBond']>) => {
-    this.internalStore.unregisterBond(...args);
+  public unregisterBond = (...args: Parameters<TirCache['unregisterBonds']>) => {
+    this.internalStore.unregisterBonds(...args);
+  };
+
+  public getRootId = (...args: Parameters<TirCache['getRootId']>) => {
+    return this.internalStore.getRootId(...args);
   };
 }
 

@@ -3,7 +3,7 @@ import { Queryable } from './queryable';
 import type { ConnectionRoot } from '../caches/connection-root';
 import type { Variables } from 'graphql-request';
 import type TirService from 'tir/services/tir';
-import type { ClientId, TStemData } from './types';
+import type { ClientId, RelayConnectionData } from './types';
 import { tracked } from 'tracked-built-ins';
 
 export class Connection extends Queryable implements Array<Pod> {
@@ -12,7 +12,7 @@ export class Connection extends Queryable implements Array<Pod> {
   private declare readonly parentClientId?: ClientId;
 
   @tracked
-  private declare connection: TStemData;
+  private declare connection: RelayConnectionData;
 
   @tracked
   private declare __pods: Set<ClientId>;
@@ -50,7 +50,7 @@ export class Connection extends Queryable implements Array<Pod> {
           node: edge.node
             ? this.store.getPod(
                 this.root.modelName,
-                edge.node[this.store.getIDInfo(this.root.modelName).dataKey],
+                String(edge.node[this.store.getIDInfo(this.root.modelName).dataKey]),
               )
             : undefined,
         };
@@ -64,7 +64,7 @@ export class Connection extends Queryable implements Array<Pod> {
    * For computational efficiency, a set of clientIds is directly passed as arg,
    * not to recompute via real identifier fields
    * */
-  public update = (data: TStemData, pods: Set<ClientId>) => {
+  public update = (data: RelayConnectionData, pods: Set<ClientId>) => {
     this.connection = data;
     this.__pods = pods;
   };

@@ -1,29 +1,27 @@
 import type TirService from 'tir/services/tir';
 import type { FieldProcessor } from 'tir/field-processor';
-import type {
-  AttrField,
-  RelationshipField,
-} from 'tir/model/field-mappings';
+import type { AttrField, RelationshipField } from 'tir/model/field-mappings';
 import type { PodRegistry } from 'tir/model/registry';
 import type { GraphQlErrorData, ClientId } from 'tir/model/types';
 import { configure } from 'tir/utils';
 import { tracked } from 'tracked-built-ins';
+import type { RootFieldName } from './types';
 
 class ScalarRoot<T> {
   declare store: TirService;
 
   private declare loaded: boolean;
 
-  /** dataKey on parent Pod */
-  protected declare readonly dataKey: (
+  /** propertyName on parent Pod */
+  protected declare readonly propertyName: (
     | AttrField
     | RelationshipField
-  )['dataKey'];
+  )['propertyName'];
 
   /** Root's clientid: IMPORTANT! not to be confused with 'value' on NodeRoot */
   protected declare readonly clientId?: ClientId | undefined; // undefined only for root ConnectionRoot
   public declare readonly rootKey:
-    | `${keyof PodRegistry}:${RelationshipField['dataKey']}:${ClientId}`
+    | `${keyof PodRegistry}:${RelationshipField['propertyName']}:${ClientId}`
     | `${keyof PodRegistry}:${string}`;
 
   public declare initial: T;
@@ -39,7 +37,7 @@ class ScalarRoot<T> {
     store: TirService,
     initial: T,
     modelName: keyof PodRegistry,
-    dataKey: (AttrField | RelationshipField)['dataKey'] | string,
+    propertyName: (AttrField | RelationshipField)['propertyName'] | RootFieldName,
     clientId?: ClientId,
     processor?: FieldProcessor,
   ) {
@@ -48,16 +46,18 @@ class ScalarRoot<T> {
     this.initial = initial;
     this.value = initial;
     this.processor = processor;
-    this.dataKey = dataKey;
+    this.propertyName = propertyName;
     this.clientId = clientId;
-    this.rootKey = clientId
-      ? `${modelName}:${dataKey}:${clientId}`
-      : `${modelName}:${dataKey}`;
+    this.rootKey = this.store.getRootId({
+      modelName: modelName,
+      clientId: clientId,
+      root: propertyName
+    });
   }
 
   get isRelation() {
     return false;
-  }
+  };
 
   /**
    *
@@ -68,7 +68,7 @@ class ScalarRoot<T> {
 
   public get: () => T | null = () => {
     return this.value;
-  }
+  };
 
   public set = (val: T) => {
     this.value = this.processor ? this.processor.process(val) : val;

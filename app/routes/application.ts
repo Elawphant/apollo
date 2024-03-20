@@ -26,7 +26,7 @@ export default class ApplicationRoute extends Route {
     //     }
     //   }
     // `;
-    const user = this.store.create("user") as User
+    const user = this.store.create('user') as User;
     return user;
   };
 }

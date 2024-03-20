@@ -1,0 +1,11 @@
+const ADDON_PREFIX = 'Tir';
+
+const ERROR_MESSAGE_PREFIX = `${ADDON_PREFIX}: `;
+
+// TODO deprecate
+const NAMING_CONVENTIONS = {
+  item: 'Pod',
+  set: 'Stem',
+};
+
+module.exports = { ADDON_PREFIX, ERROR_MESSAGE_PREFIX, NAMING_CONVENTIONS };

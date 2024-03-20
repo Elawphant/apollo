@@ -8,14 +8,14 @@ import { ConnectionRoot } from 'tir/caches/connection-root';
 import { NodeRoot } from 'tir/caches/node-root';
 import { ScalarRoot } from 'tir/caches/scalar-root';
 
-export { 
-    Pod, 
-    Connection, 
-    NodePod, 
-    attr, 
-    belongsTo, 
-    hasMany, 
-    NodeRoot, 
-    ConnectionRoot, 
-    ScalarRoot 
+export {
+  Pod,
+  Connection,
+  NodePod,
+  attr,
+  belongsTo,
+  hasMany,
+  NodeRoot,
+  ConnectionRoot,
+  ScalarRoot,
 };

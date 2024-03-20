@@ -21,6 +21,6 @@ function configure(store: TirService, object: { store: TirService }) {
     owner,
   );
   object.store = store;
-};
+}
 
 export { configureOwner, configure };
