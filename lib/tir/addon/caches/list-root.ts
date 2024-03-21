@@ -7,7 +7,7 @@ import { Connection } from '../model/connection';
 import { tracked } from 'tracked-built-ins';
 import { ScalarRoot } from 'tir/caches/scalar-root';
 
-class ConnectionRoot<T extends Pod>
+class ListRoot<T extends Pod>
   extends ScalarRoot<Set<ClientId>>
   implements Array<Pod>
 {
@@ -45,23 +45,7 @@ class ConnectionRoot<T extends Pod>
     ) as Pod[];
   }
 
-  public identifyConnection = (variables: Variables) => {
-    return identifyConnection(variables);
-  };
-
-  /**
-   * Always returns a connetion instance.
-   * */
-  public getConnection = (variables: Variables) => {
-    const id = this.identifyConnection(variables);
-    if (this.connections.get(id)) {
-      this.connections.set(id, new Connection(this.store, this, variables));
-    }
-    return this.connections.get(id)!;
-  };
-
   public get added() {
-    // TODO: benchmark: maybe instead of [...this.initial] use Array.from(this.initial)
     return Array.from(this.value)
       .filter((clientId) => ![...this.initial].includes(clientId))
       .map((clientId) => this.store.getPodByClientId(clientId));
@@ -232,7 +216,7 @@ class ConnectionRoot<T extends Pod>
   }
 
   /**
-   * When an inverse update occurs, this the inverse connection items are no more trusted.
+   * When an inverse update occurs, this the inverse list items are no more trusted.
    * isSettled property let's check whether an update would be approprate
    */
   get isSettled() {
@@ -243,4 +227,4 @@ class ConnectionRoot<T extends Pod>
   }
 }
 
-export { ConnectionRoot };
+export { ListRoot };

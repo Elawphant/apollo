@@ -21,8 +21,8 @@ class ScalarRoot<T> {
   /** Root's clientid: IMPORTANT! not to be confused with 'value' on NodeRoot */
   protected declare readonly clientId?: ClientId | undefined; // undefined only for root ConnectionRoot
   public declare readonly rootKey:
-    | `${keyof PodRegistry}:${RelationshipField['propertyName']}:${ClientId}`
-    | `${keyof PodRegistry}:${string}`;
+    | `${ClientId}::${RelationshipField['propertyName']}`
+    | `${keyof PodRegistry}::${string}`;
 
   public declare initial: T;
 
@@ -37,7 +37,9 @@ class ScalarRoot<T> {
     store: TirService,
     initial: T,
     modelName: keyof PodRegistry,
-    propertyName: (AttrField | RelationshipField)['propertyName'] | RootFieldName,
+    propertyName:
+      | (AttrField | RelationshipField)['propertyName']
+      | RootFieldName,
     clientId?: ClientId,
     processor?: FieldProcessor,
   ) {
@@ -51,13 +53,13 @@ class ScalarRoot<T> {
     this.rootKey = this.store.getRootId({
       modelName: modelName,
       clientId: clientId,
-      root: propertyName
+      root: propertyName,
     });
   }
 
   get isRelation() {
     return false;
-  };
+  }
 
   /**
    *

@@ -13,4 +13,9 @@ type EnvConfig = {
   errorPolicy: 'none' | 'ignore' | 'all'; // TODO: Deprecate, because we are going to use ember request
 };
 
-export { ADDON_PREFIX, ERROR_MESSAGE_PREFIX, NAMING_CONVENTIONS, type EnvConfig };
+export {
+  ADDON_PREFIX,
+  ERROR_MESSAGE_PREFIX,
+  NAMING_CONVENTIONS,
+  type EnvConfig,
+};

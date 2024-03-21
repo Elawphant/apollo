@@ -4,14 +4,16 @@ import type { PodRegistry } from './registry';
 import type { AttrField, RelationshipField } from './field-mappings';
 import type { RootFieldName, RootType } from 'tir/caches/types';
 
-type RootRef = {
-  modelName: keyof PodRegistry,
-  root: RootFieldName,
-  rootType: RootType,
-} | {
-  clientId: ClientId,
-  root: (AttrField | RelationshipField)['propertyName'],
-};
+type RootRef =
+  | {
+      modelName: keyof PodRegistry;
+      root: RootFieldName;
+      rootType: RootType;
+    }
+  | {
+      clientId: ClientId;
+      root: (AttrField | RelationshipField)['propertyName'];
+    };
 
 type ConnectionRef = {
   variables: Variables;
@@ -48,7 +50,7 @@ type RelayConnectionData = {
   [key: string]: unknown;
 };
 
-type FlatNodeArrayData = RelayNodeData[]
+type FlatNodeArrayData = RelayNodeData[];
 
 type ClientId = `${keyof PodRegistry}:${number}`;
 

@@ -10,7 +10,7 @@ export interface AttrField {
   dataKey: string;
   defaultValue: any;
   alias: boolean;
-  processor?: FieldProcessor 
+  processor?: FieldProcessor;
 }
 
 export interface RelationshipField {
@@ -24,5 +24,5 @@ export interface RelationshipField {
   relationshipType: 'hasMany' | 'belongsTo';
   inverse: RelationshipField['propertyName'] | null;
   polymorphic?: boolean;
-  alias: boolean
+  alias: boolean;
 }

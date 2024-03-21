@@ -150,7 +150,9 @@ export default class TirService extends Service {
     this.internalStore.registerBond(...args);
   };
 
-  public unregisterBond = (...args: Parameters<TirCache['unregisterBonds']>) => {
+  public unregisterBond = (
+    ...args: Parameters<TirCache['unregisterBonds']>
+  ) => {
     this.internalStore.unregisterBonds(...args);
   };
 

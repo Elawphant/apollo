@@ -19,6 +19,7 @@ import { ScalarRoot } from './scalar-root';
 import { DefaultFieldProcessors } from 'tir/field-processors';
 import type TirService from 'tir/services/tir';
 import { RootType, type RootFieldName } from './types';
+import { ListRoot } from './list-root';
 
 abstract class TirCache {
   declare readonly store: TirService;
@@ -64,9 +65,9 @@ abstract class TirCache {
 
   @tracked // string in map key is the root field name of the GraphQL query
   protected declare readonly ROOTS: Map<
-    `${ClientId}::${RelationshipField['propertyName']}` // field on clientID
+    | `${ClientId}::${RelationshipField['propertyName']}` // field on clientID
     | `${keyof PodRegistry}::${RootFieldName}`,
-    ScalarRoot<unknown> | NodeRoot<Pod> | ConnectionRoot<Pod>
+    ScalarRoot<unknown> | NodeRoot<Pod> | ConnectionRoot<Pod> | ListRoot<Pod>
   >;
 
   /** Map of modelName to server side identifier field, e.g. user: username */
@@ -114,34 +115,37 @@ abstract class TirCache {
       );
       RawModelConstructor.modelName = modelName;
       this.KNOWN_POD_TYPES.set(modelName, RawModelConstructor);
-      const registrables = {}
-      Object.entries(RawModelConstructor.META.fields).forEach(([key, field]) => {
-        if (field.fieldType === 'attribute') {
-          const fieldDef = { ...field }
-          let Processor: typeof FieldProcessor | undefined;
-          if (field.fieldProcessorName) {
-            Processor = getOwner(this)?.lookup(
-              `field-processor:${field.fieldProcessorName}`,
-            ) as typeof FieldProcessor | undefined;
-            // Try looking up in default field processors
-            if (!Processor) {
-              Processor = DefaultFieldProcessors[field.fieldProcessorName];
+      const registrables = {};
+      Object.entries(RawModelConstructor.META.fields).forEach(
+        ([key, field]) => {
+          if (field.fieldType === 'attribute') {
+            const fieldDef = { ...field };
+            let Processor: typeof FieldProcessor | undefined;
+            if (field.fieldProcessorName) {
+              Processor = getOwner(this)?.lookup(
+                `field-processor:${field.fieldProcessorName}`,
+              ) as typeof FieldProcessor | undefined;
+              // Try looking up in default field processors
+              if (!Processor) {
+                Processor = DefaultFieldProcessors[field.fieldProcessorName];
+              }
+              assert(
+                `No field processor with name "${field.fieldProcessorName}" was found.`,
+                Processor,
+              );
             }
-            assert(
-              `No field processor with name "${field.fieldProcessorName}" was found.`,
-              Processor,
+            Object.assign(
+              fieldDef,
+              'processor',
+              Processor ? new Processor(this.store) : undefined,
             );
+            Object.assign(registrables, key, fieldDef as AttrField);
+          } else {
+            Object.assign(registrables, key, field as RelationshipField);
           }
-          Object.assign(fieldDef, 'processor', Processor ? new Processor(this.store) : undefined);
-          Object.assign(registrables, key, fieldDef as AttrField);
-        } else {
-          Object.assign(registrables, key, field as RelationshipField);
-        }
-      })
-      this.FIELD_META.set(
-        modelName,
-        new Map(Object.entries(registrables)),
+        },
       );
+      this.FIELD_META.set(modelName, new Map(Object.entries(registrables)));
       this.PROPERTY_NAME_TO_DATA_KEY.set(
         modelName,
         new Map(Object.entries(RawModelConstructor.META.properties)),
@@ -194,7 +198,10 @@ abstract class TirCache {
   // TODO: POSSIBLY DEPRECATE, COMPOSER WILL NOT NEED THIS
   public getPropertiesForType = (
     modelName: keyof PodRegistry,
-  ): Map<AttrField['propertyName'] | RelationshipField['propertyName'], AttrField['dataKey'] | RelationshipField['dataKey']> => {
+  ): Map<
+    AttrField['propertyName'] | RelationshipField['propertyName'],
+    AttrField['dataKey'] | RelationshipField['dataKey']
+  > => {
     // ensures meta registration
     this.modelFor(modelName);
     return this.PROPERTY_NAME_TO_DATA_KEY.get(modelName)!;
@@ -211,20 +218,24 @@ abstract class TirCache {
    * Returns the key for LISTS and ROOTS maps
    */
   public getRootId = (
-    ref: {
-      clientId: ClientId,
-      root: (AttrField | RelationshipField)['propertyName'],
-    } | {
-      modelName: keyof PodRegistry,
-      root: RootFieldName,
-    }
-  ): `${ClientId}::${RelationshipField['propertyName']}` | `${keyof PodRegistry}::${RootFieldName}` => {
+    ref:
+      | {
+          clientId: ClientId;
+          root: (AttrField | RelationshipField)['propertyName'];
+        }
+      | {
+          modelName: keyof PodRegistry;
+          root: RootFieldName;
+        },
+  ):
+    | `${ClientId}::${RelationshipField['propertyName']}`
+    | `${keyof PodRegistry}::${RootFieldName}` => {
     const [first, second] = Object.values(ref);
     return `${first}::${second}`;
   };
 
   /**
-   * TODO: POSSIBLY DEPRECATE 
+   * TODO: POSSIBLY DEPRECATE
    * Retrives the inverse root dataKey
    */
   // protected getInverseDataKey = (
@@ -288,9 +299,7 @@ abstract class TirCache {
     // Use bonds to efficiently remove all bonds to clientId
     this.unregisterBonds(pod.CLIENT_ID, true);
     // remove the clientId and real id from cache
-    this.IDENTIFIER_TO_CLIENT_ID.delete(
-      `${modelName}:${pod[propertyName]}`,
-    );
+    this.IDENTIFIER_TO_CLIENT_ID.delete(`${modelName}:${pod[propertyName]}`);
     this.CLIENT_ID_TO_POD.delete(pod.CLIENT_ID);
   };
 
@@ -342,23 +351,29 @@ abstract class TirCache {
    * Always returns a Root instance
    */
   public getRoot = (
-    ref: {
-      modelName: keyof PodRegistry,
-      root: RootFieldName,
-      rootType: RootType,
-    } | {
-      clientId: ClientId,
-      root: (AttrField | RelationshipField)['propertyName'],
-    }
-  ): ScalarRoot<unknown> | NodeRoot<Pod> | ConnectionRoot<Pod> => {
+    ref:
+      | {
+          modelName: keyof PodRegistry;
+          root: RootFieldName;
+          rootType: RootType;
+        }
+      | {
+          clientId: ClientId;
+          root: (AttrField | RelationshipField)['propertyName'];
+        },
+  ):
+    | ScalarRoot<unknown>
+    | NodeRoot<Pod>
+    | ConnectionRoot<Pod>
+    | ListRoot<Pod> => {
     //@ts-ignore: ok to get undefined
     const { modelName, root, rootType, clientId } = ref;
     assert(
       `${ERROR_MESSAGE_PREFIX}Method 'getRoot' should be called either as top root field, with 'key', 'rootType' and 'modelName', or as field on pod with only 'key'`,
-      (rootType && modelName) || (clientId !== undefined)
+      (rootType && modelName) || clientId !== undefined,
     );
 
-    const key = this.getRootId(ref)
+    const key = this.getRootId(ref);
 
     const rootInstance = this.ROOTS.get(key);
     // if is a relation
@@ -366,7 +381,10 @@ abstract class TirCache {
       const __modelName = clientId.split(':')[0] as keyof PodRegistry;
       const meta = this.getFieldMetaForType(__modelName);
       const field = meta.get(root);
-      assert(`${ERROR_MESSAGE_PREFIX}No such field with propertyName ${root} on ${modelName}`, field);
+      assert(
+        `${ERROR_MESSAGE_PREFIX}No such field with propertyName ${root} on ${modelName}`,
+        field,
+      );
       if (field.fieldType === 'attribute') {
         const value = field.defaultValue
           ? field.processor?.process(field.defaultValue) ?? field.defaultValue
@@ -379,7 +397,7 @@ abstract class TirCache {
             __modelName,
             root,
             clientId,
-            field.processor
+            field.processor,
           ),
         );
       } else {
@@ -388,24 +406,38 @@ abstract class TirCache {
             key,
             new NodeRoot(this.store, null, __modelName, root, clientId),
           );
-        };
+        }
         if (field.relationshipType === 'hasMany') {
           this.ROOTS.set(key, new ConnectionRoot(this.store, ref));
-        };
+        }
       }
     } else {
-      let registrable: NodeRoot<Pod> | ScalarRoot<unknown> | ConnectionRoot<Pod>;
+      let registrable:
+        | NodeRoot<Pod>
+        | ScalarRoot<unknown>
+        | ConnectionRoot<Pod>
+        | ListRoot<Pod>;
       switch (true) {
-        case rootType === RootType.node: registrable = new NodeRoot(this.store, null, modelName!, root);
+        case rootType === RootType.node:
+          registrable = new NodeRoot(this.store, null, modelName!, root);
           break;
-        case rootType === RootType.connection: registrable = new ConnectionRoot(this.store, ref);
+        case rootType === RootType.connection:
+          registrable = new ConnectionRoot(this.store, ref);
           break;
-        // TODO: add RootType.nodeList
-        default: registrable = new ScalarRoot<unknown>(this.store, null, modelName!, root);
+        case rootType === RootType.nodeList:
+          registrable = new ListRoot(this.store, ref);
           break;
-      };
+        default:
+          registrable = new ScalarRoot<unknown>(
+            this.store,
+            null,
+            modelName!,
+            root,
+          );
+          break;
+      }
       this.ROOTS.set(key, registrable);
-    };
+    }
     return this.ROOTS.get(key)!;
   };
 
@@ -493,13 +525,13 @@ abstract class TirCache {
         );
       } else if (root instanceof NodeRoot && root.value === clientId) {
         root.update(null, updateInitial, false); // do not mark loaded, becuase it might not necessarily be loaded
-      };
+      }
       bonds.delete(rootId);
     });
     // if updating initial, also remove from bonds at all
     if (updateInitial) {
       this.BONDS.delete(clientId);
-    };
+    }
   };
 
   /**

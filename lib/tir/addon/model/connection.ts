@@ -50,7 +50,9 @@ export class Connection extends Queryable implements Array<Pod> {
           node: edge.node
             ? this.store.getPod(
                 this.root.modelName,
-                String(edge.node[this.store.getIDInfo(this.root.modelName).dataKey]),
+                String(
+                  edge.node[this.store.getIDInfo(this.root.modelName).dataKey],
+                ),
               )
             : undefined,
         };

@@ -21,7 +21,6 @@ function attr(options?: {
     ensurePodMeta(target);
 
     const { dataKey, defaultValue, fieldProcessorName } = options ?? {};
-    
 
     const meta: AttrField = {
       propertyName: propertyName,
@@ -29,7 +28,7 @@ function attr(options?: {
       fieldType: 'attribute',
       dataKey: dataKey ?? propertyName,
       defaultValue: defaultValue ?? null,
-      alias: dataKey !== undefined ?  true : false,
+      alias: dataKey !== undefined ? true : false,
     };
 
     Object.assign(target.constructor.META.fields, {

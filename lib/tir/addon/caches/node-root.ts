@@ -28,7 +28,7 @@ class NodeRoot<T extends Pod> extends ScalarRoot<ClientId | null> {
       if (clientId) {
         this.store.registerBond(clientId, this.rootKey, updateInitial);
       } else if (this.initial) {
-        this.store.unregisterBond(this.initial, this.rootKey, updateInitial);
+        this.store.unregisterBond(this.initial, updateInitial);
       }
       this.initial = this.value;
     }
